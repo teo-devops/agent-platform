@@ -131,7 +131,7 @@ en su proceso y su framework, cabe en un portátil:
 
 ```bash
 make a2a-up                      # python-developer (LangGraph) :9101 y code-reviewer (LangChain) :9102
-make a2a-run MSG="Una función que valide un IBAN español"   # software-manager (ADK), otra terminal
+make caso-7 MSG="Una función que valide un IBAN español"    # software-manager (ADK), otra terminal
 ```
 
 ```mermaid

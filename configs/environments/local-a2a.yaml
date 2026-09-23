@@ -7,7 +7,7 @@
 #   make a2a-run MSG="..."                   # terminal 2: el jefe, delegando por A2A
 #
 # Sin este fichero, lo mismo con una variable (gana sobre el fichero):
-#   AGENT_A2A_ENDPOINTS="python-developer=http://localhost:9101/,code-reviewer=http://localhost:9102/"
+#   AGENT_A2A_ENDPOINTS="python-developer=http://127.0.0.1:9101/,code-reviewer=http://127.0.0.1:9102/"
 
 agentDefaults:
   model:
@@ -21,6 +21,6 @@ workflowDefaults:
 
 a2a:
   endpoints:
-    python-developer: http://localhost:9101/
-    code-reviewer: http://localhost:9102/
-    data-provider: http://localhost:9103/     # la "organización A" del caso dataspace
+    python-developer: http://127.0.0.1:9101/
+    code-reviewer: http://127.0.0.1:9102/
+    data-provider: http://127.0.0.1:9103/     # la "organización A" del caso dataspace

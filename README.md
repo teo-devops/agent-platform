@@ -24,10 +24,321 @@ El caso de uso de la demo es **ingeniería de software**: un jefe de desarrollo
 (`python-developer`) y pasa el resultado a un revisor (`code-reviewer`) que
 fundamenta sus hallazgos con análisis estático servido por MCP.
 
-> ¿Primera vez? Empieza por [Explora los casos de uso](#explora-los-casos-de-uso),
-> que no necesita clúster. Para entender el porqué: [`docs/concepts.md`](docs/concepts.md)
+> ¿Primera vez? Mira los diagramas de [Arquitectura](#arquitectura) y sigue por
+> [Explora los casos de uso](#explora-los-casos-de-uso), que no necesita clúster. Para entender el porqué: [`docs/concepts.md`](docs/concepts.md)
 > (framework vs runtime vs protocolo, con el diagrama del flujo). Para presentarlo:
 > el guion de [`docs/demo.md`](docs/demo.md).
+
+---
+
+## Arquitectura
+
+La idea central cabe en una frase: **cada agente es sólo un `agent.yaml` y un
+`prompt.md`**. Al arrancar, la plataforma lee ese manifiesto y construye con él un
+agente del framework que toque —ADK, LangGraph o LangChain—. Es **el mismo YAML
+para los tres**; sólo cambia el *builder* que lo traduce. Ningún agente del
+catálogo tiene una línea de Python.
+
+Los diagramas van de lo general a lo concreto. El detalle de cada paquete está en
+[`docs/architecture.md`](docs/architecture.md).
+
+### 1. El mapa completo
+
+Qué se escribe (izquierda), quién lo convierte en algo ejecutable (centro) y
+dónde acaba corriendo y observándose (derecha).
+
+```mermaid
+flowchart LR
+    subgraph ESCRIBES["Lo que escribes — catalog/ y configs/"]
+        direction TB
+        AG["catalog/agents/‹dominio›/‹nombre›/<br/>agent.yaml + prompt.md"]
+        WF["catalog/workflows/*.yaml"]
+        TL["catalog/tools/*.py<br/>funciones sueltas"]
+        SK["catalog/skills/‹nombre›/SKILL.md"]
+        CF["configs/<br/>defaults · models · guardrails<br/>permissions · policies · environments/"]
+    end
+
+    subgraph PLATAFORMA["La plataforma — platform/"]
+        direction TB
+        CORE["agent-core<br/>esquemas · capas de config · registros"]
+        FAC["agent-runtime<br/>agentctl + AgentFactory"]
+        subgraph RT["runtimes/ — un builder por framework"]
+            ADK["agent-runtime-adk"]
+            LG["agent-runtime-langgraph"]
+            LC["agent-runtime-langchain"]
+        end
+        MCP["agent-mcp"]
+        A2A["agent-a2a"]
+        KAG["agent-kagent"]
+        MLF["agent-mlflow"]
+    end
+
+    subgraph CORRE["Dónde corre"]
+        direction TB
+        LOCAL["Carril local<br/>agentctl run · ADK Dev UI · LangGraph Studio"]
+        PROC["Carril A2A local<br/>un proceso por agente :9101-9103"]
+        K8S["Carril clúster<br/>kind + kagent"]
+    end
+
+    OBS[("MLflow<br/>trazas · prompts · versiones · evals")]
+
+    AG & WF & SK & CF --> CORE
+    TL --> CORE
+    CORE --> FAC
+    FAC --> ADK & LG & LC
+    ADK & LG & LC --> LOCAL
+    A2A --> PROC
+    KAG --> K8S
+    MCP --> K8S
+    LOCAL & PROC & K8S -. OpenTelemetry .-> OBS
+    MLF --> OBS
+```
+
+### 2. Un manifiesto, tres frameworks
+
+El recorrido de `python-developer` desde el disco hasta un objeto del framework.
+
+```mermaid
+flowchart TD
+    Y["agent.yaml<br/>(agents.platform/v1)"] --> L
+    P["prompt.md"] --> L
+
+    subgraph L["1 · Carga y mezcla de capas — agent_core/config/store.py"]
+        direction LR
+        D["configs/defaults.yaml"] --> A["agent.yaml"] --> E["configs/environments/‹env›.yaml"]
+    end
+
+    L --> R["2 · Resolución de referencias"]
+    R --> R1["model.profile: precise<br/>→ configs/models.yaml → gemini-2.5-flash, temp 0.1"]
+    R --> R2["tools: code.check_syntax<br/>→ catalog/tools/code.py :: check_syntax"]
+    R --> R3["skills: hexagonal-architecture@^1.0<br/>→ catalog/skills/"]
+    R --> R4["permissions / guardrails / policies<br/>→ perfiles de configs/"]
+
+    R1 & R2 & R3 & R4 --> M["AgentManifest validado<br/>(pydantic, neutro: sin conceptos de ningún framework)"]
+
+    M --> Q{"3 · ¿Qué runtime?<br/>--runtime  ›  spec.runtime  ›  agentDefaults.runtime"}
+
+    Q -->|adk| B1["builder agent:adk"]
+    Q -->|langgraph| B2["builder agent:langgraph"]
+    Q -->|langchain| B3["builder agent:langchain"]
+
+    B1 --> O1["LlmAgent<br/>+ plugins de enforcement"]
+    B2 --> O2["create_react_agent<br/>+ pre/post_model_hook"]
+    B3 --> O3["create_agent<br/>+ middleware"]
+```
+
+La precedencia del runtime es la misma que la de cualquier otro ajuste: el flag
+del CLI gana al manifiesto, y el manifiesto a los valores de la flota. Hoy
+`configs/defaults.yaml` dice `runtime: adk`.
+
+### 3. Qué se convierte en qué
+
+Cada campo del manifiesto tiene su equivalente en los tres frameworks. Esta tabla
+es, literalmente, lo que hacen los tres `builder.py`.
+
+| En el `agent.yaml` | ADK | LangGraph | LangChain |
+|---|---|---|---|
+| `prompt` (+ índice de skills) | `LlmAgent(instruction=)` | `create_react_agent(prompt=)` | `create_agent(system_prompt=)` |
+| `model.profile` | nombre del modelo + `generate_content_config` | chat model de LangChain | chat model de LangChain |
+| `tools: [code.check_syntax]` | `FunctionTool` | `StructuredTool` | `StructuredTool` |
+| `skills` | dos `FunctionTool` que sirven el `SKILL.md` | dos `StructuredTool` | dos `StructuredTool` |
+| `sub_agents` · `mode: tool` | `AgentTool(hijo)` | tool que llama a `hijo.invoke()` | tool que llama a `hijo.invoke()` |
+| `sub_agents` · otro modo | `sub_agents=[…]` (cede el turno) | ❌ error explicado | ❌ error explicado |
+| `guardrails` · `permissions` · `policies` | plugins de ADK | `pre_model_hook` / `post_model_hook` | middleware |
+| `kind: Workflow` | `LoopAgent` (loop) · `Workflow` con aristas (el resto) | `StateGraph` | LCEL: secuencia o `RunnableParallel` (sin bucles ni DAG) |
+
+### 4. Anatomía de un agente
+
+Todo lo que aparece en un `agent.yaml` es una **referencia por nombre** a algo
+que vive en otro sitio. Por eso cambiar un modelo, un permiso o una tool no
+requiere tocar Python.
+
+```mermaid
+flowchart LR
+    subgraph M["catalog/agents/engineering/python-developer/agent.yaml"]
+        direction TB
+        m1["metadata: name, version 0.2.0, owner"]
+        m2["spec.model.profile: precise"]
+        m3["spec.prompt.file: prompt.md"]
+        m4["spec.tools: code.check_syntax"]
+        m5["spec.skills: hexagonal-architecture@^1.0"]
+        m6["spec.permissions.tools.allow"]
+        m7["spec.sub_agents (en software-manager)"]
+    end
+
+    m2 --> c1["configs/models.yaml<br/>profiles.precise"]
+    m3 --> c2["prompt.md<br/>(al lado del yaml)"]
+    m4 --> c3["catalog/tools/code.py<br/>def check_syntax(code) -> dict"]
+    m5 --> c4["catalog/skills/hexagonal-architecture/SKILL.md"]
+    m6 --> c5["configs/permissions.yaml<br/>+ reglas del propio agente"]
+    m7 --> c6["otro agent.yaml del catálogo<br/>(se construye de forma recursiva)"]
+    m1 --> c7["MLflow: LoggedModel<br/>python-developer@0.2.0"]
+```
+
+Una tool es una función con type hints y docstring: el registro las descubre
+solas al arrancar (`agent_runtime/context.py`), y la firma **es** el esquema que
+ve el modelo. Soltar un `.py` en `catalog/tools/` basta para publicarla.
+
+### 5. Cómo se enchufan los paquetes
+
+Nadie importa a nadie por nombre. Cada paquete se anuncia por *entry points* en
+su `pyproject.toml`, así que **instalar un paquete es lo que hace que su
+capacidad exista**. Por eso añadir un cuarto framework sería un paquete nuevo, no
+un cambio en la fábrica.
+
+```mermaid
+flowchart BT
+    CORE["agent-core<br/>esquemas · config · registros · telemetry<br/>(sin frameworks)"]
+    RUN["agent-runtime<br/>agentctl · AgentFactory · playgrounds"]
+
+    ADK["agent-runtime-adk"]
+    LG["agent-runtime-langgraph"]
+    LC["agent-runtime-langchain"]
+    MCP["agent-mcp"]
+    A2A["agent-a2a"]
+    KAG["agent-kagent"]
+    MLF["agent-mlflow<br/>(el único que importa mlflow)"]
+
+    RUN --> CORE
+    ADK & LG & LC & MCP & A2A & KAG & MLF --> RUN
+
+    ADK -. "builders agent:adk · workflow:adk<br/>runtimes · plugins" .-> RUN
+    LG -. "builders · runtimes · instrumentors" .-> RUN
+    LC -. "builders · runtimes · instrumentors" .-> RUN
+    A2A -. "transports: a2a · commands" .-> RUN
+    MCP -. "commands: mcp" .-> RUN
+    KAG -. "commands: kagent" .-> RUN
+    MLF -. "commands: mlflow · eval_sinks" .-> RUN
+```
+
+Las flechas sólidas son dependencias de instalación; las punteadas, lo que la
+fábrica y `agentctl` descubren en tiempo de ejecución.
+
+### 6. Delegación: el sub-agente no sabe dónde vive el otro
+
+`software-manager` declara `sub_agents: [python-developer, code-reviewer]` con
+`mode: tool`. El manifiesto es el mismo en los tres carriles; lo que cambia es lo
+que `factory.remote()` responde al construirlo.
+
+```mermaid
+flowchart TD
+    SM["software-manager<br/>sub_agents: python-developer, code-reviewer"] --> F{"factory.remote(hijo)<br/>¿el entorno dice que vive fuera?"}
+
+    F -->|"None — agentctl run"| IN["Se construye en el mismo proceso<br/>y se envuelve como tool"]
+    F -->|"URL — --env local-a2a<br/>o AGENT_A2A_ENDPOINTS"| RM["A2ADelegate → tool con el mismo nombre<br/>message/send por HTTP a :9101 / :9102"]
+    F -->|"kagent"| KG["Tool de tipo Agent en el CRD<br/>A2A a través del controlador de kagent"]
+
+    IN & RM & KG --> SAME["Para el modelo del coordinador es idéntico:<br/>mismo nombre de tool, misma descripción,<br/>mismos permisos, una sola traza (traceparent)"]
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Usuario
+    participant SM as software-manager
+    participant PD as python-developer
+    participant CR as code-reviewer
+    participant T as catalog/tools (code.*)
+
+    U->>SM: "Una función que calcule la mediana"
+    SM->>PD: tool python_developer(request)
+    Note over SM,PD: en proceso · A2A local · A2A vía kagent
+    PD->>T: code.check_syntax(code)
+    T-->>PD: {valid: true}
+    PD-->>SM: código + docstring
+    SM->>CR: tool code_reviewer(código)
+    CR->>T: code.metrics(code)
+    T-->>CR: complejidad, longitud, tipos
+    CR-->>SM: hallazgos concretos
+    SM-->>U: código revisado
+```
+
+### 7. El carril clúster: de manifiesto a pods
+
+`agentctl kagent render` traduce los mismos manifiestos a CRDs de kagent según
+[`deploy/kagent/release.yaml`](deploy/kagent/release.yaml), que decide **dónde y
+cómo** corre cada agente. El `agent.yaml` no sabe que existe kagent.
+
+```mermaid
+flowchart LR
+    subgraph REPO["Repositorio"]
+        AY["catalog/agents/*/agent.yaml"]
+        REL["deploy/kagent/release.yaml<br/>qué agentes · qué modo"]
+        TOOLS["catalog/tools/*.py"]
+        SKL["catalog/skills/*"]
+    end
+
+    AY & REL --> RENDER["agentctl kagent render"]
+    RENDER --> DIST[".agent-platform/dist/kagent/*.yaml<br/>Agent · ModelConfig · RemoteMCPServer"]
+
+    TOOLS --> IMG_MCP["imagen mcp"]
+    SKL --> IMG_SK["imágenes OCI de skills"]
+    IMG_MCP & IMG_SK --> REG[("registro local<br/>localhost:5001")]
+
+    subgraph KIND["kind · agent-lab"]
+        subgraph NS_K["ns kagent"]
+            CTRL["kagent-controller<br/>A2A para todos los agentes"]
+            SMP["software-manager<br/>Declarative — lo ejecuta kagent"]
+            CRP["code-reviewer<br/>Declarative + skill OCI"]
+            PDP["python-developer<br/>BYO — agentctl kagent host (LangGraph)"]
+            MCPS["catalog-tools<br/>servidor MCP"]
+            UI["kagent UI :8082"]
+        end
+        subgraph NS_O["ns observability"]
+            OTEL["OTel Collector :4317"]
+            MLS["MLflow :5500"]
+            MINIO[("MinIO :9901")]
+        end
+    end
+
+    DIST -->|kubectl apply| CTRL
+    REG --> PDP & MCPS & CRP
+    SMP -->|A2A| CTRL
+    CTRL -->|A2A| PDP & CRP
+    CRP -->|MCP code.*| MCPS
+    SMP & CRP & PDP -. trazas .-> OTEL
+    OTEL --> MLS --> MINIO
+```
+
+| Modo | Quién ejecuta el agente | Lo que aprovecha | Límite |
+|---|---|---|---|
+| **Declarative** | el motor de kagent | sólo YAML, UI y A2A gratis | no sabe expresar guardrails, políticas ni temperatura (se avisa al renderizar) |
+| **BYO** | nuestro runtime en un pod (`agentctl kagent host`) | todo el manifiesto, con enforcement | necesita la imagen `agent-host` |
+
+### 8. Observabilidad: la misma traza en los tres carriles
+
+```mermaid
+flowchart LR
+    subgraph L["Carril local"]
+        LA["agentctl run / dev-adk / dev-langgraph<br/>(OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)"]
+    end
+    subgraph C["Carril clúster"]
+        CA["pods de kagent"] --> COL["OTel Collector"]
+    end
+
+    LA -->|"OTLP/HTTP directo"| ML[("MLflow :5500<br/>experimento agent-platform")]
+    COL -->|OTLP| ML
+
+    CLI["agentctl mlflow<br/>prompts · register · sync · metrics"] --> ML
+    EV["agentctl eval --sink mlflow"] --> ML
+```
+
+MLflow escucha en `localhost:5500` en los dos carriles: el del clúster por
+NodePort o, sin clúster, `make mlflow-local`. Nunca los dos a la vez; el Makefile
+y `cluster-up.sh` lo comprueban antes de arrancar.
+
+### 9. Carriles y puertos
+
+| Carril | Se levanta con | Puertos del host |
+|---|---|---|
+| Local | `make dev-adk` · `dev-langgraph` · `mcp` · `mcp-inspector` | 8000 · 2024 · 8001 · 6274 |
+| A2A local | `make a2a-up` | 9101 · 9102 · 9103 |
+| MLflow sin clúster | `make mlflow-local` | 5500 |
+| Clúster | `make lab` | 8082 (kagent) · 5500 (MLflow) · 9901 (MinIO) · 5001 (registro) · 8083 (`make kagent-a2a`) |
+
+Los carriles local y clúster no comparten puertos salvo el 5500, que es a
+propósito. Todo lo que habla con Kubernetes va contra el contexto
+`kind-agent-lab`, nunca contra el contexto activo de `kubectl`.
 
 ---
 
@@ -36,25 +347,43 @@ fundamenta sus hallazgos con análisis estático servido por MCP.
 ```bash
 make install                   # .venv con todos los paquetes
 cp .env.example .env           # pon tu GOOGLE_API_KEY
-source .venv/bin/activate      # agentctl vive en .venv/bin: sin esto, "command not found"
-agentctl list                  # los agentes y flujos del catálogo
+make casos                     # el menú: qué caso es cada número
+make caso-3                    # y a jugar
 ```
 
-Cada fila añade **una** forma de colaborar a la anterior. Con `-v` la terminal
-narra el trabajo que la respuesta final esconde: quién delega en quién, qué tools
-llama cada uno y qué viaja por A2A.
+Cada caso añade **una** forma de colaborar a la anterior. Todos narran en la
+terminal el trabajo que la respuesta final esconde: quién delega en quién, qué
+tools llama cada uno y qué viaja por A2A.
 
-| # | Caso | Qué colaboración ves | Pruébalo |
+| # | Pruébalo | Qué colaboración ves | Míralo también en una UI |
 |---|---|---|---|
-| 1 | `greeting` | Ninguna: un modelo con instrucciones | `agentctl run greeting -v -m "Hola, ¿qué sabes hacer?"` |
-| 2 | `health-advisor` | Un agente que llama a **tools** (código Python) | `agentctl run health-advisor -v -m "Mido 1,80 m y peso 85 kg, ¿cómo voy?"` |
-| 3 | `software-manager` | **Delegación decidida por el modelo**: el jefe llama a `python-developer` y a `code-reviewer`, y si la revisión encuentra un fallo, vuelve al desarrollador | `agentctl run software-manager -v -m "Una función que valide un IBAN español"` |
-| 4 | `research-and-write` | **Flujo secuencial**: el orden lo fija el YAML, no el modelo | `agentctl run research-and-write -v -m "Qué es el protocolo A2A"` |
-| 5 | `parallel-briefing` | **En paralelo**: dos agentes sobre el mismo tema | `agentctl run parallel-briefing -v -m "Kubernetes operators"` |
-| 6 | `review-loop` | **Bucle**: desarrollador ↔ revisor, dos vueltas | `agentctl run review-loop -v -m "Una función que invierta una cadena"` |
-| 7 | `software-manager` por **A2A local** | Lo mismo que el 3, pero cada sub-agente en **su proceso y su framework** | terminal 1: `make a2a-up` · terminal 2: `make a2a-run MSG="..."` |
-| 8 | `data-consumer` → `data-provider` por **A2A local** | **Dos organizaciones**: B pregunta a A qué datos tiene y decide si su política permite el uso | terminal 1: `make a2a-up` · terminal 2: `make a2a-run A2A_AGENT=data-consumer MSG="Datos de movilidad en bicicleta para un producto comercial"` |
-| 9 | `software-manager` en **kagent** | A2A entre **pods**, con la UI de kagent | `make lab` y el [chat del jefe](http://localhost:8082/agents/kagent/software-manager/chat) |
+| 1 | `make caso-1` | `greeting`: ninguna, un modelo con instrucciones | `make dev-adk AGENT=greeting` |
+| 2 | `make caso-2` | `health-advisor`: un agente que llama a **tools** (código Python) | `make dev-adk AGENT=health-advisor` (pestaña *Events*) |
+| 3 | `make caso-3` | `software-manager`: **delegación decidida por el modelo**. El jefe llama a `python-developer` y a `code-reviewer`, y si la revisión encuentra un fallo, vuelve al desarrollador | `make dev-adk AGENT=software-manager` |
+| 4 | `make caso-4` | `research-and-write`: **flujo secuencial**. El orden lo fija el YAML, no el modelo | `make dev-langgraph` (el grafo) |
+| 5 | `make caso-5` | `parallel-briefing`: **en paralelo**, dos agentes sobre el mismo tema | `make dev-langgraph` |
+| 6 | `make caso-6` | `review-loop`: **bucle** desarrollador ↔ revisor, dos vueltas | `make dev-langgraph` |
+| 7 | `make caso-7` | El 3 por **A2A**: cada sub-agente en **su proceso y su framework** | La terminal de `make a2a-up` |
+| 8 | `make caso-8` | `data-consumer` → `data-provider`: **dos organizaciones** por A2A. B pregunta a A qué datos tiene y decide si su política permite el uso | La terminal de `make a2a-up` |
+| 9 | `make lab` | `software-manager` en **kagent**: A2A entre **pods** | El [chat del jefe](http://localhost:8082/agents/kagent/software-manager/chat) en kagent |
+
+Para jugar con cualquiera:
+
+```bash
+make caso-3 MSG="Una función que convierta grados Celsius a Fahrenheit"   # tu mensaje
+make caso-3 RUNTIME=langgraph                                              # otro framework: adk | langgraph | langchain
+make caso-8 MSG="Datos de movilidad en bicicleta para investigación"       # misma pregunta, otro propósito
+```
+
+Cada caso imprime primero el comando `agentctl` que ejecuta, así que de paso lo
+aprendes. Para usar `agentctl` directamente, `source .venv/bin/activate` (sin eso,
+`command not found`). En resumen: `make` para enseñar, `agentctl` para lo que
+`make` no cubre (`show`, `validate`, `a2a send`...), y las UIs para verlo en pantalla.
+
+**Los casos A2A (7 y 8) se montan solos.** Si los sub-agentes no están escuchando,
+`make` los levanta en segundo plano (log en `.agent-platform/a2a.log`; se paran
+con `make a2a-down`). Para una demo, mejor verlos: `make a2a-up` en una terminal y
+`make caso-7` en otra, una al lado de la otra.
 
 El 3 y el 7 son el mismo agente y el mismo manifiesto. Así se ve el 7 (real,
 recortado): el jefe corre en ADK, el desarrollador en LangGraph y el revisor en
@@ -105,7 +434,7 @@ organizaciones que no comparten código, ni modelo, ni datos. Solo se hablan.
 |---|---|---|
 | Qué tiene | Una tool, [`dataspace.search_datasets`](catalog/tools/dataspace.py): tres datasets, cada uno con su política de uso | Nada propio: ni datos ni tools |
 | Qué hace | Responde qué ofrece sobre un tema, con la política tal cual | Pregunta a A y decide si la política permite el uso del usuario |
-| Dónde corre | Su proceso, en LangGraph (`make a2a-up`, :9103) | El tuyo, en ADK (`make a2a-run A2A_AGENT=data-consumer`) |
+| Dónde corre | Su proceso, en LangGraph (`make a2a-up`, :9103) | El tuyo, en ADK (`make caso-8`) |
 
 Prueba el mismo tema con dos propósitos. La respuesta cambia por la política de
 A, no por el prompt de B:
@@ -232,11 +561,12 @@ make dev-langchain             # LangGraph Studio sobre agentes de LangChain
 make run AGENT=software-manager MSG="Una función que valide un IBAN español"   # narra (-v)
 
 make a2a-up                    # los sub-agentes, en otro proceso, por A2A
-make a2a-run MSG="..."         # (otra terminal) el jefe delega en ellos
+make caso-7 MSG="..."          # (otra terminal) el jefe delega en ellos
 ```
 
-Cada ejecución deja su traza en MLflow con `agent.framework` distinto (si MLflow
-está levantado; si no, no pasa nada).
+Cada ejecución deja su traza en MLflow con `agent.framework` distinto. `make`
+sólo activa las trazas si MLflow responde en :5500 (`make mlflow-local`); si no,
+el caso corre igual y te lo dice al final.
 
 ### Carril clúster — kagent + MLflow
 

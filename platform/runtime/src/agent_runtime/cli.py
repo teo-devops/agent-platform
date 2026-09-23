@@ -109,6 +109,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.verbose:
         from agent_core.telemetry import enable_narration
 
+        _quiet_framework_noise()
+
         agents, delegates = factory.participants(args.name)
         enable_narration(agents=agents, delegates=delegates)
         remote = {n: u for n, u in factory.store.remote_agents.items() if n in agents}
@@ -127,6 +129,20 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     asyncio.run(_run())
     return 0
+
+
+def _quiet_framework_noise() -> None:
+    """Keep the narration readable: warnings about the frameworks, not the agents.
+
+    ADK flags an experimental schema feature on every tool declaration and
+    google-genai recommends a chat API on every call. True, and useless while
+    watching who delegates in whom.
+    """
+    import logging
+    import warnings
+
+    warnings.filterwarnings("ignore", message=r"\[EXPERIMENTAL\]", category=UserWarning)
+    logging.getLogger("google_genai.models").setLevel(logging.ERROR)
 
 
 def cmd_export(args: argparse.Namespace) -> int:

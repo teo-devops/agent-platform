@@ -294,7 +294,7 @@ Preguntas que suelen salir:
 | Un pod no arranca | `make status`; `kubectl -n kagent describe agent <nombre>`; `make deploy` es idempotente |
 | `discoveredTools` no refleja las tools nuevas | `make refresh-tools` |
 | La traza no tiene `agent.*` | `make metrics` (sincroniza primero); `kubectl -n observability logs deploy/otel-collector` |
-| El clúster no está (Paso 2) | A2A sin kagent: `make a2a-up` en una terminal y `make a2a-run` en otra. Mismos tres agentes, cada uno en su framework, delegación por A2A narrada en las dos terminales |
+| El clúster no está (Paso 2) | A2A sin kagent: `make a2a-up` en una terminal y `make caso-7` en otra. Mismos tres agentes, cada uno en su framework, delegación por A2A narrada en las dos terminales |
 | WARP conectado (TLS interceptado) | El clúster monta la CA del host; si Gemini falla por certificado, `warp-cli disconnect` |
 
 ## Resetear entre ensayos

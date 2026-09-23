@@ -29,9 +29,9 @@ def test_local_runs_every_agent_in_process():
 def test_the_local_a2a_environment_places_the_specialists_elsewhere():
     remote = ConfigStore(ROOT, environment="local-a2a").remote_agents
     assert remote == {
-        "python-developer": "http://localhost:9101/",
-        "code-reviewer": "http://localhost:9102/",
-        "data-provider": "http://localhost:9103/",
+        "python-developer": "http://127.0.0.1:9101/",
+        "code-reviewer": "http://127.0.0.1:9102/",
+        "data-provider": "http://127.0.0.1:9103/",
     }
 
 
@@ -39,7 +39,7 @@ def test_the_variable_wins_over_the_environment_file(monkeypatch):
     monkeypatch.setenv("AGENT_A2A_ENDPOINTS", "python-developer=http://elsewhere:1/")
     remote = ConfigStore(ROOT, environment="local-a2a").remote_agents
     assert remote["python-developer"] == "http://elsewhere:1/"
-    assert remote["code-reviewer"] == "http://localhost:9102/"
+    assert remote["code-reviewer"] == "http://127.0.0.1:9102/"
 
 
 def test_a_malformed_variable_is_an_error(monkeypatch):

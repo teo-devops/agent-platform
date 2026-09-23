@@ -12,8 +12,25 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 paso() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
+# Puertos del host que publica el clúster (deploy/kind/cluster.yaml) y el registro.
+# Si alguno está ocupado, kind fallaría a medias con "address already in use".
+puertos_libres() {
+  local ocupados=0
+  for port in "$@"; do
+    if ss -ltn 2>/dev/null | grep -q ":${port} "; then
+      echo "    puerto ${port} ocupado: $(ss -ltnp 2>/dev/null | grep ":${port} " | grep -o 'users:.*' || echo '(otro proceso)')"
+      ocupados=1
+    fi
+  done
+  if [ "${ocupados}" = 1 ]; then
+    echo "    Libéralos antes de crear el clúster (el 5500 suele ser \`make mlflow-local\`: Ctrl+C en su terminal)."
+    exit 1
+  fi
+}
+
 paso "Registro local ${REGISTRY} (localhost:${REGISTRY_PORT})"
 if [ "$(docker inspect -f '{{.State.Running}}' "${REGISTRY}" 2>/dev/null || true)" != "true" ]; then
+  puertos_libres "${REGISTRY_PORT}"
   docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --name "${REGISTRY}" registry:2 >/dev/null
 fi
 echo "    ok"
@@ -22,9 +39,11 @@ paso "Clúster kind '${CLUSTER}'"
 if kind get clusters 2>/dev/null | grep -qx "${CLUSTER}"; then
   echo "    ya existe; se reutiliza"
 else
+  puertos_libres 8082 5500 9901
   kind create cluster --config "${ROOT}/deploy/kind/cluster.yaml"
 fi
 kubectl config use-context "kind-${CLUSTER}" >/dev/null
+kubectl() { command kubectl --context "kind-${CLUSTER}" "$@"; }
 
 paso "containerd: localhost:${REGISTRY_PORT} -> ${REGISTRY}:5000"
 # Mismo registro, dos nombres: el host empuja a localhost:5001; el nodo y los
