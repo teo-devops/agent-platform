@@ -1,0 +1,43 @@
+# Named permission profiles: what an agent is allowed to reach.
+# `deny` always wins over `allow`; both accept glob patterns over references.
+
+profiles:
+  default:
+    tools:
+      allow: ["*"]
+      deny: []
+    agents:
+      allow: ["*"]
+      deny: []
+
+  no-tools:
+    tools:
+      allow: []
+      deny: ["*"]
+    agents:
+      allow: []
+      deny: ["*"]
+
+  health-only:
+    tools:
+      allow: ["health.*", "time.*"]
+      deny: []
+    agents:
+      allow: []
+      deny: ["*"]
+
+  delegation-only:
+    tools:
+      allow: []
+      deny: ["*"]
+    agents:
+      allow: ["*"]
+      deny: []
+
+  dataspace-provider:
+    tools:
+      allow: ["dataspace.*"]
+      deny: []
+    agents:
+      allow: []
+      deny: ["*"]

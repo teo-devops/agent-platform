@@ -1,0 +1,63 @@
+# MLflow: trazas (OTLP), Prompt Registry, versiones de agente y runs de eval.
+# Metadatos en SQLite (un PVC), artefactos en MinIO. Para producción, Postgres.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mlflow
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 1Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/name: mlflow } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: mlflow }
+    spec:
+      securityContext: { fsGroup: 1000 }
+      containers:
+        - name: mlflow
+          # ghcr.io/mlflow/mlflow + boto3 (deploy/images/Dockerfile.mlflow)
+          image: localhost:5001/agent-platform/mlflow:3.16.1
+          args:
+            - mlflow
+            - server
+            - --host=0.0.0.0
+            - --port=5000
+            - --backend-store-uri=sqlite:////data/mlflow.db
+            - --artifacts-destination=s3://mlflow
+            - --serve-artifacts
+            # Sin esto arranca un worker por CPU del nodo, que en un portátil
+            # son decenas de procesos y un OOMKill seguro.
+            - --workers=2
+            # Lo alcanzan el navegador (localhost:5500), el collector y agentctl.
+            - --allowed-hosts=*
+          env:
+            - { name: MLFLOW_S3_ENDPOINT_URL, value: "http://minio:9000" }
+            - { name: AWS_ACCESS_KEY_ID, valueFrom: { secretKeyRef: { name: minio, key: AWS_ACCESS_KEY_ID } } }
+            - { name: AWS_SECRET_ACCESS_KEY, valueFrom: { secretKeyRef: { name: minio, key: AWS_SECRET_ACCESS_KEY } } }
+          ports: [{ name: http, containerPort: 5000 }]
+          readinessProbe:
+            httpGet: { path: /health, port: 5000 }
+            periodSeconds: 5
+          volumeMounts: [{ name: data, mountPath: /data }]
+          # MLflow 3.16 con 2 workers y su planificador de jobs ronda 1,8 GiB.
+          resources:
+            requests: { cpu: 100m, memory: 1Gi }
+            limits: { memory: 3Gi }
+      volumes: [{ name: data, persistentVolumeClaim: { claimName: mlflow } }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+spec:
+  type: NodePort
+  selector: { app.kubernetes.io/name: mlflow }
+  ports: [{ name: http, port: 5000, targetPort: 5000, nodePort: 30500 }]

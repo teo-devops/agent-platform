@@ -1,0 +1,19 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: data-provider
+  version: 0.1.0
+  description: Organización A. Ofrece sus datasets y la política de uso de cada uno.
+  owner: org-a
+  tags: [demo, a2a, dataspace]
+spec:
+  model:
+    profile: precise
+  prompt:
+    file: prompt.md
+  tools:
+    - ref: dataspace.search_datasets
+  permissions:
+    profile: dataspace-provider
+  policies:
+    max_tool_calls: 4

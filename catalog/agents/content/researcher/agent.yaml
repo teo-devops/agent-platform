@@ -1,0 +1,22 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: researcher
+  version: 0.1.0
+  description: Gathers key facts, background and current trends about a topic.
+  owner: content-team
+  tags: [demo, workflow-step]
+spec:
+  model:
+    profile: precise
+  prompt:
+    instruction: |
+      You are an academic researcher. Given a topic, produce structured research
+      notes: key facts, historical background, current state of the art and the
+      open questions that remain.
+
+      Be factual and objective. Mark anything uncertain as uncertain. Do not
+      write prose for a general audience: these notes are input for a writer.
+  permissions:
+    profile: no-tools
+  output_key: research_notes

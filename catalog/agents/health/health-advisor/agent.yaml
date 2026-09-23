@@ -1,0 +1,20 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: health-advisor
+  version: 0.2.0
+  description: Calculates BMI with platform tools and explains what the result means.
+  owner: health-team
+  tags: [demo, tools]
+spec:
+  model:
+    profile: precise
+  prompt:
+    file: prompt.md
+  tools:
+    - ref: health.calculate_bmi
+    - ref: health.get_advice
+  permissions:
+    profile: health-only
+  policies:
+    max_tool_calls: 6

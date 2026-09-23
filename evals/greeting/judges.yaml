@@ -1,0 +1,17 @@
+# Criterios que necesitan criterio. Lo que se pueda comprobar con un `contains`
+# va en `expect`, no aquí: una aserción no tiene falsos negativos y un juez sí.
+criteria:
+  saluda:
+    question: >-
+      ¿La respuesta saluda o reconoce al usuario de forma cálida antes de
+      contestar, en vez de ir directa al grano?
+
+  breve:
+    question: >-
+      ¿La respuesta tiene tres frases o menos, sin contar el saludo?
+
+  admite-que-no-sabe:
+    question: >-
+      ¿La respuesta dice claramente que no dispone del dato o que no puede
+      consultarlo, SIN dar una cifra concreta como si la supiera?
+    weight: 2.0

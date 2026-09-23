@@ -1,0 +1,6 @@
+# Una skill del catálogo como imagen OCI, el formato con el que kagent las carga
+# (spec.skills.refs). El init container de kagent extrae la imagen en /skills/<nombre>.
+#   docker build -f deploy/images/Dockerfile.skill --build-arg SKILL=hexagonal-architecture .
+FROM scratch
+ARG SKILL
+COPY catalog/skills/${SKILL}/ /

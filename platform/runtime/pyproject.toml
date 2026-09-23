@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-runtime"
+version = "0.1.0"
+description = "Framework-free host: config discovery, runtime dispatch and the agentctl CLI."
+requires-python = ">=3.10"
+# No framework here. Installing this package gives you agentctl and nothing to
+# run with it; a runtime package (agent-runtime-adk, -langgraph, -langchain)
+# is what makes manifests executable.
+dependencies = [
+    "agent-core==0.1.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+agentctl = "agent_runtime.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_runtime"]

@@ -1,0 +1,16 @@
+# La UI de kagent en http://localhost:8082. El chart sólo crea un ClusterIP; este
+# Service apunta a los mismos pods por un NodePort que kind saca al host.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kagent-ui-lab
+  namespace: kagent
+  labels: { app.kubernetes.io/part-of: agent-platform }
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: kagent
+    app.kubernetes.io/instance: kagent
+    app.kubernetes.io/component: ui
+  ports:
+    - { name: ui, port: 8080, targetPort: 8080, nodePort: 30080 }

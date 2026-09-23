@@ -1,0 +1,13 @@
+# Staging mirrors production, with a wider budget for exploratory testing.
+
+agentDefaults:
+  guardrails:
+    profile: strict
+  policies:
+    profile: standard
+
+workflowDefaults:
+  guardrails:
+    profile: strict
+  policies:
+    profile: standard

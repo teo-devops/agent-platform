@@ -1,0 +1,15 @@
+apiVersion: agents.platform/v1
+kind: Workflow
+metadata:
+  name: parallel-briefing
+  version: 0.1.0
+  description: Runs research and a plain-language explanation side by side on one topic.
+  owner: content-team
+  tags: [demo, parallel]
+spec:
+  type: parallel
+  nodes:
+    - name: research
+      agent: researcher
+    - name: explain
+      agent: greeting

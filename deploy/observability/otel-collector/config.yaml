@@ -1,0 +1,40 @@
+# Recibe OTLP de kagent y de los agentes BYO, y lo entrega a MLflow.
+receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+
+processors:
+  batch: {}
+  # Quién respondió: los pods declaran su identidad como atributos de recurso
+  # (OTEL_RESOURCE_ATTRIBUTES, que escribe `agentctl kagent render`). Aquí se
+  # copian a cada span para que MLflow pueda buscarlos y agruparlos.
+  transform/identity:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["agent.name"], resource.attributes["agent.name"]) where attributes["agent.name"] == nil and resource.attributes["agent.name"] != nil
+          - set(attributes["agent.version"], resource.attributes["agent.version"]) where attributes["agent.version"] == nil and resource.attributes["agent.version"] != nil
+          - set(attributes["agent.framework"], resource.attributes["agent.framework"]) where attributes["agent.framework"] == nil and resource.attributes["agent.framework"] != nil
+          - set(attributes["prompt.hash"], resource.attributes["prompt.hash"]) where attributes["prompt.hash"] == nil and resource.attributes["prompt.hash"] != nil
+          - set(attributes["prompt.version"], resource.attributes["prompt.version"]) where attributes["prompt.version"] == nil and resource.attributes["prompt.version"] != nil
+
+exporters:
+  # MLflow ingiere OTLP/HTTP en /v1/traces. El id "0" es el experimento
+  # `agent-platform` (`agentctl mlflow init` renombra el Default).
+  otlphttp/mlflow:
+    traces_endpoint: http://mlflow:5000/v1/traces
+    headers:
+      x-mlflow-experiment-id: "0"
+    compression: none
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [transform/identity, batch]
+      exporters: [otlphttp/mlflow, debug]

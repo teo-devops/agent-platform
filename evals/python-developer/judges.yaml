@@ -1,0 +1,15 @@
+criteria:
+  cumple-el-requisito:
+    question: >-
+      ¿El código hace exactamente lo que pide el requisito, con type hints y un
+      docstring?
+
+  maneja-lista-vacia:
+    question: >-
+      ¿El código trata explícitamente el caso de la lista vacía (error claro o
+      valor documentado) en vez de fallar con una excepción genérica?
+
+  dominio-sin-infraestructura:
+    question: >-
+      ¿La lógica de negocio depende de un puerto o interfaz (Protocol/ABC) en
+      lugar de importar o instanciar el driver de base de datos directamente?

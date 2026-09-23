@@ -1,0 +1,20 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: eval-judge
+  version: 0.1.0
+  description: Decides whether one answer meets one criterion, and says why.
+  owner: platform-team
+  tags: [quality, internal]
+spec:
+  model:
+    # Frío a propósito: un juez que fluctúa no sirve para comparar dos
+    # ejecuciones, que es justo para lo que existe.
+    profile: precise
+    temperature: 0.0
+  prompt:
+    file: prompt.md
+  permissions:
+    profile: no-tools
+  policies:
+    max_llm_calls: 1

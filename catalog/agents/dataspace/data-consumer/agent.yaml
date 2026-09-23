@@ -1,0 +1,22 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: data-consumer
+  version: 0.1.0
+  description: Organización B. Busca datos en la organización A y comprueba si su política permite el uso que se pide.
+  owner: org-b
+  tags: [demo, a2a, dataspace]
+spec:
+  model:
+    profile: balanced
+  prompt:
+    file: prompt.md
+  sub_agents:
+    # Otra organización: en local-a2a y en kagent, cada pregunta viaja por A2A.
+    - ref: data-provider
+      mode: tool
+      description: El agente de la organización A. Dice qué datasets ofrece sobre un tema y con qué política de uso.
+  permissions:
+    profile: delegation-only
+  policies:
+    max_tool_calls: 3

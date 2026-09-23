@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-mlflow"
+version = "0.1.0"
+description = "MLflow as the platform's AgentOps backend: prompt registry, agent versions, eval runs and trace metrics."
+requires-python = ">=3.10"
+# The only distribution allowed to import mlflow. Everything else speaks OTel
+# (traces) or calls back through entry points (eval results), so replacing
+# MLflow means replacing this package and nothing else.
+dependencies = [
+    "agent-core==0.1.0",
+    "agent-runtime==0.1.0",
+    "mlflow>=3.10,<4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.entry-points."agent_platform.commands"]
+"mlflow" = "agent_mlflow.cli:register"
+
+[project.entry-points."agent_platform.eval_sinks"]
+"mlflow" = "agent_mlflow.evals:publish"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_mlflow"]

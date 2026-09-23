@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-mcp"
+version = "0.1.0"
+description = "Serves the catalogue's tools over the Model Context Protocol."
+requires-python = ">=3.10"
+# mcp<2: kagent's agents and ADK's MCP client are both on the 1.x line, and a
+# tool server is only useful if the clients that matter can talk to it.
+dependencies = [
+    "agent-core==0.1.0",
+    "agent-runtime==0.1.0",
+    "mcp>=1.25,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[project.entry-points."agent_platform.commands"]
+"mcp" = "agent_mcp.cli:register"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_mcp"]

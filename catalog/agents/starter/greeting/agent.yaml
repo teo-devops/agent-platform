@@ -1,0 +1,17 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: greeting
+  version: 0.1.0
+  description: Greets the user and answers short questions with enthusiasm.
+  owner: platform-team
+  tags: [demo, starter]
+spec:
+  model:
+    profile: creative
+  prompt:
+    file: prompt.md
+    variables:
+      persona: "warm, extremely polite assistant"
+  permissions:
+    profile: no-tools

@@ -1,0 +1,86 @@
+# Named guardrail profiles.
+#
+# stages : input  -> checked before the prompt reaches the model
+#          output -> checked on the model's answer
+#          tools  -> checked on tool arguments
+# actions: block  -> the call is stopped and the message is returned instead
+#          redact -> the matched text is replaced and execution continues
+#          warn   -> only recorded in the audit trail
+
+profiles:
+  off:
+    input: []
+    output: []
+    tools: []
+
+  standard:
+    input:
+      - name: prompt-injection
+        type: keywords_deny
+        action: block
+        message: "This request looks like an attempt to override the agent's instructions and was blocked."
+        params:
+          keywords:
+            - "ignore your instructions"
+            - "ignore previous instructions"
+            - "reveal your system prompt"
+            - "print your system prompt"
+      - name: oversized-input
+        type: max_chars
+        action: redact
+        params:
+          limit: 20000
+    output:
+      - name: leaked-credentials
+        type: regex_deny
+        action: redact
+        params:
+          patterns:
+            - "AIza[0-9A-Za-z_\\-]{35}"
+            - "sk-[A-Za-z0-9]{20,}"
+          placeholder: "[CREDENTIAL_REDACTED]"
+    tools: []
+
+  strict:
+    input:
+      - name: prompt-injection
+        type: keywords_deny
+        action: block
+        message: "This request looks like an attempt to override the agent's instructions and was blocked."
+        params:
+          keywords:
+            - "ignore your instructions"
+            - "ignore previous instructions"
+            - "reveal your system prompt"
+            - "print your system prompt"
+            - "disregard the rules"
+      - name: inbound-pii
+        type: pii_redact
+        action: redact
+        params:
+          kinds: [email, phone, credit_card, iban]
+      - name: oversized-input
+        type: max_chars
+        action: redact
+        params:
+          limit: 8000
+    output:
+      - name: leaked-credentials
+        type: regex_deny
+        action: redact
+        params:
+          patterns:
+            - "AIza[0-9A-Za-z_\\-]{35}"
+            - "sk-[A-Za-z0-9]{20,}"
+          placeholder: "[CREDENTIAL_REDACTED]"
+      - name: outbound-pii
+        type: pii_redact
+        action: redact
+        params:
+          kinds: [email, phone, credit_card, iban]
+    tools:
+      - name: tool-argument-pii
+        type: pii_redact
+        action: warn
+        params:
+          kinds: [credit_card, iban]

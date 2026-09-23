@@ -1,0 +1,28 @@
+# Clúster kind del laboratorio: un nodo, un registro local y tres puertos al host.
+#
+#   http://localhost:8082   kagent UI
+#   http://localhost:5500   MLflow
+#   http://localhost:9901   consola de MinIO
+#
+# El registro `agent-registry` (localhost:5001) lo crea `make cluster-up`; aquí
+# sólo se le dice a containerd dónde buscar la configuración de espejos.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: agent-lab
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.34.0
+    extraMounts:
+      # La red de i2cat intercepta TLS (Cloudflare Gateway). Con la CA del host
+      # el nodo puede tirar imágenes aunque WARP esté conectado.
+      - hostPath: /etc/ssl/certs/ca-certificates.crt
+        containerPath: /etc/ssl/certs/ca-certificates.crt
+        readOnly: true
+    extraPortMappings:
+      - { containerPort: 30080, hostPort: 8082, protocol: TCP }   # kagent UI
+      - { containerPort: 30500, hostPort: 5500, protocol: TCP }   # MLflow
+      - { containerPort: 30901, hostPort: 9901, protocol: TCP }   # MinIO console

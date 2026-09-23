@@ -1,0 +1,13 @@
+.venv
+.agent-platform
+.git
+**/__pycache__
+**/*.egg-info
+.pytest_cache
+.env
+tests
+docs
+examples
+evals
+deploy
+mlruns

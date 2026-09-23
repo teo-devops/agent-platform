@@ -1,0 +1,17 @@
+apiVersion: agents.platform/v1
+kind: Workflow
+metadata:
+  name: research-and-write
+  version: 0.2.0
+  description: Deterministic research pipeline; the topic goes in, an article comes out.
+  owner: content-team
+  tags: [demo, deterministic]
+spec:
+  type: sequential
+  nodes:
+    - name: research
+      agent: researcher
+      description: Collects the facts the article will be built on.
+    - name: write
+      agent: writer
+      description: Turns those facts into a readable article.

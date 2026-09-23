@@ -1,0 +1,26 @@
+# Como `local`, pero los sub-agentes viven en OTRO proceso y se les habla por
+# A2A. Ningún manifiesto cambia: `software-manager` sigue declarando
+# `sub_agents: [python-developer, code-reviewer]`; este fichero sólo dice dónde
+# están. Es la misma decisión que toma deploy/kagent/release.yaml en el clúster.
+#
+#   make a2a-up                              # terminal 1: sirve los dos sub-agentes
+#   make a2a-run MSG="..."                   # terminal 2: el jefe, delegando por A2A
+#
+# Sin este fichero, lo mismo con una variable (gana sobre el fichero):
+#   AGENT_A2A_ENDPOINTS="python-developer=http://localhost:9101/,code-reviewer=http://localhost:9102/"
+
+agentDefaults:
+  model:
+    profile: fast
+  policies:
+    profile: relaxed
+
+workflowDefaults:
+  policies:
+    profile: relaxed
+
+a2a:
+  endpoints:
+    python-developer: http://localhost:9101/
+    code-reviewer: http://localhost:9102/
+    data-provider: http://localhost:9103/     # la "organización A" del caso dataspace

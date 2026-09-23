@@ -1,0 +1,6 @@
+# Lo común: namespaces. La CA y los Secrets los crea `make cluster-up` desde el
+# host, porque no deben vivir en git.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespaces.yaml

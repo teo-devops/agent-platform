@@ -1,0 +1,20 @@
+# agent-mcp: catalog/tools por MCP (streamable HTTP). Contexto: la raíz del repo.
+FROM python:3.12-slim
+
+WORKDIR /app
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    AGENT_PLATFORM_ROOT=/app AGENT_LOG_FORMAT=json
+
+COPY platform/core platform/core
+COPY platform/runtime platform/runtime
+COPY platform/mcp platform/mcp
+RUN pip install ./platform/core ./platform/runtime ./platform/mcp
+
+# Sólo lo que load_platform necesita para encontrar el catálogo de tools.
+COPY configs configs
+COPY catalog/tools catalog/tools
+
+USER 1000
+EXPOSE 8000
+ENTRYPOINT ["agentctl"]
+CMD ["mcp", "serve", "--host", "0.0.0.0", "--port", "8000"]

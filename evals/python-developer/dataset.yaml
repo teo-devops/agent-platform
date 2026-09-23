@@ -1,0 +1,31 @@
+apiVersion: agents.platform/v1
+kind: EvalSuite
+metadata:
+  name: python-developer
+spec:
+  target: python-developer
+  metric: pass_at_1
+  threshold: 0.75
+  cases:
+    - id: funcion-tipada
+      description: Lo básico del contrato del prompt; comprobable sin juez.
+      input: "Una función que devuelva las palabras de una frase en orden inverso."
+      expect:
+        contains: ["def ", "->", "\"\"\""]
+      judge: [cumple-el-requisito]
+      tags: [humo]
+
+    - id: casos-limite
+      input: "Una función que calcule la mediana de una lista de números."
+      expect:
+        contains: ["def ", "->"]
+      judge: [maneja-lista-vacia, cumple-el-requisito]
+      tags: [limites]
+
+    - id: puerto-hexagonal
+      description: Toca infraestructura, así que debería seguir la skill.
+      input: "Una función que guarde un pedido en PostgreSQL y devuelva su id."
+      expect:
+        contains: ["def "]
+      judge: [dominio-sin-infraestructura]
+      tags: [skill]

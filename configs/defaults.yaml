@@ -1,0 +1,28 @@
+# Fleet-wide defaults. Every agent starts from this layer and overrides only
+# what it needs, so a change here moves the whole fleet at once.
+#
+# Layer order (later wins):
+#   configs/defaults.yaml -> agents/<name>/agent.yaml -> environments/<env>.yaml
+
+agentDefaults:
+  # Which framework runs the fleet. Change this line and every agent moves;
+  # an individual agent can still pin its own with `spec.runtime`, and
+  # `agentctl --runtime X` overrides both for one command.
+  runtime: adk
+  model:
+    profile: fast
+  guardrails:
+    profile: standard
+  policies:
+    profile: standard
+  permissions:
+    profile: default
+
+workflowDefaults:
+  runtime: adk
+  guardrails:
+    profile: standard
+  policies:
+    profile: standard
+  permissions:
+    profile: default

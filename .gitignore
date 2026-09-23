@@ -1,0 +1,33 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets and local state
+.env
+.env.local
+.adk/
+logs/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# Todo lo que genera la plataforma y los playgrounds
+.agent-platform/
+langgraph.json
+.langgraph_api/
+mlruns/
+
+# Estado local de MLflow (make mlflow-local lo deja en .agent-platform/)
+mlflow.db

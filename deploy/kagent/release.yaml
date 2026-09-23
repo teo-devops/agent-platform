@@ -1,0 +1,57 @@
+# Qué agentes del catálogo corren en kagent, y cómo.
+#
+# El manifiesto de un agente dice QUÉ es. Este fichero dice DÓNDE y CÓMO corre:
+# es una decisión de despliegue, así que vive con el despliegue.
+#
+#   agentctl kagent render      ->  .agent-platform/dist/kagent/*.yaml
+#   kubectl apply -k .agent-platform/dist/kagent
+apiVersion: deploy.agents.platform/v1
+kind: KagentRelease
+metadata:
+  name: demo
+spec:
+  namespace: kagent
+  environment: local
+  # En el laboratorio las imágenes se reconstruyen con la misma etiqueta: sin
+  # Always, el nodo seguiría usando la copia que ya tiene.
+  imagePullPolicy: Always
+
+  model:
+    provider: Gemini
+    apiKeySecret: kagent-gemini
+    apiKeySecretKey: GOOGLE_API_KEY
+
+  # catalog/tools publicado por MCP para los agentes declarativos.
+  toolServer:
+    name: catalog-tools
+    image: localhost:5001/agent-platform/mcp:0.1.0
+    tools: ["code.*"]
+
+  # La imagen que ejecuta los agentes BYO con el runtime de la plataforma.
+  host:
+    image: localhost:5001/agent-platform/agent-host:0.1.0
+
+  # Las skills viajan como imágenes OCI (`make skills`). Es el mismo registro que
+  # localhost:5001, visto desde dentro del clúster.
+  skills:
+    registry: agent-registry:5000
+    insecure: true
+
+  # La red de i2cat intercepta TLS: los pods que hablan con Gemini necesitan su CA.
+  trustBundle:
+    configMap: host-ca
+
+  # Caso de uso: ingeniería de software. Un jefe de desarrollo (declarativo)
+  # orquesta por A2A a un desarrollador (BYO) y a un revisor (declarativo).
+  #
+  # Si el jefe fuera BYO (`mode: byo`, `runtime: langgraph`), `render` le daría
+  # AGENT_A2A_ENDPOINTS apuntando a `a2aGateway` (el controlador de kagent), y
+  # seguiría delegando por A2A en los otros pods en vez de llevarlos dentro.
+  agents:
+    - name: software-manager
+      mode: declarative        # kagent lo construye y lo ejecuta: sólo YAML
+    - name: code-reviewer
+      mode: declarative        # tools code.* por MCP + skill por imagen OCI
+    - name: python-developer
+      mode: byo                # lo ejecuta la plataforma (LangGraph) dentro de kagent
+      runtime: langgraph

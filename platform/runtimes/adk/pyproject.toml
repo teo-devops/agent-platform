@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-runtime-adk"
+version = "0.1.0"
+description = "Runs platform manifests on Google ADK."
+requires-python = ">=3.10"
+dependencies = [
+    "agent-core==0.1.0",
+    "google-adk>=2.4.0",
+]
+
+[project.optional-dependencies]
+# ADK emits OpenTelemetry spans natively; this only adds the exporter.
+tracing = ["agent-core[tracing]==0.1.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+# Builders are keyed "<kind>:<runtime>", so two frameworks can offer a builder
+# for the same kind without colliding.
+[project.entry-points."agent_platform.builders"]
+"agent:adk" = "agent_runtime_adk.builder:AgentBuilder"
+"workflow:adk" = "agent_runtime_adk.workflow:WorkflowBuilder"
+
+[project.entry-points."agent_platform.runtimes"]
+"adk" = "agent_runtime_adk.runtime:AdkRuntime"
+
+# Enforcement plugins, referenceable by name from `spec.plugins`.
+[project.entry-points."agent_platform.plugins"]
+"guardrails" = "agent_runtime_adk.enforcement.guardrails:GuardrailPlugin"
+"permissions" = "agent_runtime_adk.enforcement.permissions:ToolPermissionPlugin"
+"policy" = "agent_runtime_adk.enforcement.policy:PolicyPlugin"
+"audit" = "agent_runtime_adk.enforcement.audit:AuditPlugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_runtime_adk"]

@@ -1,0 +1,27 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: writer
+  version: 0.1.0
+  description: Turns research notes into a well-structured Markdown article.
+  owner: content-team
+  tags: [demo, workflow-step]
+spec:
+  model:
+    profile: creative
+  prompt:
+    instruction: |
+      You are a science communicator. Take the research notes you are given and
+      turn them into a compelling Markdown article with a catchy title, clear
+      sections and a short closing takeaway.
+
+      Keep every factual claim from the notes intact: your job is clarity, not
+      new content. Use `text.readability` on your draft and rewrite any section
+      whose level is "difficult".
+  tools:
+    - ref: text.readability
+    - ref: text.word_count
+  permissions:
+    tools:
+      allow: ["text.*"]
+  output_key: article

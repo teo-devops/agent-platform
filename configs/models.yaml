@@ -1,0 +1,26 @@
+# Named model profiles. Agents reference a profile instead of a model id, so
+# migrating the fleet to a new model is a one-line change in this file.
+
+profiles:
+  fast:
+    name: gemini-2.5-flash
+    temperature: 0.4
+    max_output_tokens: 2048
+
+  balanced:
+    name: gemini-2.5-flash
+    temperature: 0.7
+    top_p: 0.95
+    max_output_tokens: 4096
+
+  precise:
+    name: gemini-2.5-flash
+    temperature: 0.1
+    top_p: 0.8
+    max_output_tokens: 4096
+
+  creative:
+    name: gemini-2.5-flash
+    temperature: 1.0
+    top_p: 0.98
+    max_output_tokens: 8192

@@ -1,0 +1,26 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: software-manager
+  version: 0.3.0
+  description: Coordina a un desarrollador y a un revisor para entregar código Python revisado.
+  owner: dev-tools-team
+  tags: [demo, multi-agent, a2a]
+spec:
+  model:
+    profile: balanced
+  prompt:
+    file: prompt.md
+  sub_agents:
+    # En local son tools que construye el mismo proceso. En kagent son otros
+    # pods, y cada llamada viaja por A2A. El manifiesto no cambia.
+    - ref: python-developer
+      mode: tool
+      description: Escribe una función Python que cumple un requisito, con tipos y docstring.
+    - ref: code-reviewer
+      mode: tool
+      description: Revisa código Python con análisis estático y devuelve hallazgos concretos.
+  permissions:
+    profile: delegation-only
+  policies:
+    max_tool_calls: 8

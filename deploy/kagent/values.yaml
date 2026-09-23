@@ -1,0 +1,53 @@
+# kagent 0.10.1 para el laboratorio: Gemini, trazas al collector y nada más.
+#
+#   helm upgrade --install kagent-crds oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds --version 0.10.1 -n kagent
+#   helm upgrade --install kagent oci://ghcr.io/kagent-dev/kagent/helm/kagent --version 0.10.1 -n kagent -f values.yaml
+
+# El ModelConfig por defecto de kagent. Nuestros agentes traen el suyo (render),
+# pero el chart necesita uno, y así también apunta al mismo Secret.
+providers:
+  default: gemini
+  gemini:
+    provider: Gemini
+    model: gemini-2.5-flash
+    apiKeySecretRef: kagent-gemini
+    apiKeySecretKey: GOOGLE_API_KEY
+
+# Trazas del controlador y de los agentes declarativos -> collector -> MLflow.
+otel:
+  tracing:
+    enabled: true
+    exporter:
+      otlp:
+        endpoint: http://otel-collector.observability:4317
+        protocol: grpc
+        insecure: true
+
+# Los agentes y herramientas de serie (k8s, istio, helm...) no son la demo.
+# Apagados, el catálogo que se ve en la UI es sólo el de este repositorio.
+kmcp:
+  enabled: false
+kagent-tools:
+  enabled: false
+grafana-mcp:
+  enabled: false
+k8s-agent:
+  enabled: false
+kgateway-agent:
+  enabled: false
+istio-agent:
+  enabled: false
+promql-agent:
+  enabled: false
+observability-agent:
+  enabled: false
+argo-rollouts-agent:
+  enabled: false
+helm-agent:
+  enabled: false
+cilium-policy-agent:
+  enabled: false
+cilium-manager-agent:
+  enabled: false
+cilium-debug-agent:
+  enabled: false

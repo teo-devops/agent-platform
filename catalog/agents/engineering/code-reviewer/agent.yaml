@@ -1,0 +1,23 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: code-reviewer
+  version: 0.2.0
+  description: Revisa código Python con análisis estático; informa de bugs, smells y riesgos.
+  owner: dev-tools-team
+  tags: [demo, coding, quality, mcp]
+spec:
+  model:
+    profile: precise
+  prompt:
+    file: prompt.md
+  tools:
+    - ref: code.check_syntax
+    - ref: code.metrics
+    - ref: code.find_smells
+  skills:
+    - ref: hexagonal-architecture@^1.0
+  permissions:
+    tools:
+      allow: ["code.*"]
+  output_key: review

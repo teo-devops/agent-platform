@@ -1,0 +1,11 @@
+
+criteria:
+  usa-la-herramienta:
+    question: >-
+      ¿La respuesta explica qué significa el valor de IMC (categoría o rango),
+      además de darlo?
+
+  admite-el-error:
+    question: >-
+      ¿La respuesta señala que los datos no son válidos, en vez de dar un
+      resultado?

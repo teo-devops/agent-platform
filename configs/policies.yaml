@@ -1,0 +1,25 @@
+# Named operational profiles: how much work one invocation may do.
+# These are enforced by the runtime, not requested from the model.
+
+profiles:
+  relaxed:
+    max_tool_calls: 40
+    max_llm_calls: 30
+    timeout_seconds: 300
+    budget:
+      max_tokens: 200000
+
+  standard:
+    max_tool_calls: 12
+    max_llm_calls: 10
+    timeout_seconds: 120
+    retry_attempts: 1
+    budget:
+      max_tokens: 60000
+
+  frugal:
+    max_tool_calls: 4
+    max_llm_calls: 4
+    timeout_seconds: 60
+    budget:
+      max_tokens: 15000

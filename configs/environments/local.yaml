@@ -1,0 +1,12 @@
+# Local development: cheap models, loose limits, guardrails still on so that
+# what you test locally behaves like production.
+
+agentDefaults:
+  model:
+    profile: fast
+  policies:
+    profile: relaxed
+
+workflowDefaults:
+  policies:
+    profile: relaxed

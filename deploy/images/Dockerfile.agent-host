@@ -1,0 +1,37 @@
+# agent-host: sirve un agente del catálogo como agente BYO de kagent (A2A :8080).
+# El agente se elige en tiempo de ejecución con AGENT y AGENT_RUNTIME, así que
+# una sola imagen sirve a todo el catálogo. Contexto: la raíz del repo.
+FROM python:3.12-slim
+
+WORKDIR /app
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    AGENT_PLATFORM_ROOT=/app AGENT_LOG_FORMAT=json
+
+COPY platform/core platform/core
+COPY platform/runtime platform/runtime
+COPY platform/runtimes/langgraph platform/runtimes/langgraph
+COPY platform/runtimes/langchain platform/runtimes/langchain
+COPY platform/kagent platform/kagent
+COPY platform/a2a platform/a2a
+# kagent-core pide opentelemetry-instrumentation-*>=0.52.0, que en PyPI sólo
+# existen como 0.5xb0 (pre-releases): pip no las elige sin nombrarlas. 0.59b0 es
+# la serie de opentelemetry-sdk 1.38, la que kagent-core fija. Su tracing importa
+# además el instrumentador de OpenAI, que a su vez importa `openai`. Y a2a-sdk
+# 1.x reorganizó sus módulos: kagent 0.10 está escrito contra la serie 0.3.
+# agent-a2a: un coordinador BYO delega en los otros pods por A2A
+# (AGENT_A2A_ENDPOINTS, que escribe `agentctl kagent render`).
+RUN pip install \
+      "opentelemetry-instrumentation-fastapi==0.59b0" "opentelemetry-instrumentation-httpx==0.59b0" \
+      "openai>=1.72" "a2a-sdk[http-server]>=0.3.26,<1" \
+      "./platform/core[tracing]" ./platform/runtime \
+      "./platform/runtimes/langgraph[tracing]" "./platform/runtimes/langchain[tracing]" \
+      "./platform/kagent[host]" ./platform/a2a
+
+# El contenido: manifiestos, tools, skills y perfiles. Cambiarlo no toca la imagen base.
+COPY configs configs
+COPY catalog catalog
+
+USER 1000
+EXPOSE 8080
+ENTRYPOINT ["agentctl"]
+CMD ["kagent", "host"]

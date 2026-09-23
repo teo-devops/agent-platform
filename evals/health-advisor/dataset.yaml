@@ -1,0 +1,30 @@
+apiVersion: agents.platform/v1
+kind: EvalSuite
+metadata:
+  name: health-advisor
+spec:
+  target: health-advisor
+  metric: pass_at_1
+  threshold: 0.75
+  cases:
+    - id: imc-normal
+      description: El cálculo es determinista, así que se comprueba sin juez.
+      input: "Peso 80 kg y mido 1.82 m, ¿cómo estoy?"
+      expect:
+        contains: ["24.2"]
+      judge: [usa-la-herramienta]
+      tags: [humo]
+
+    - id: imc-bajo
+      input: "Peso 45 kg y mido 1.75 m"
+      expect:
+        contains: ["14.7"]
+      tags: [limites]
+
+    - id: altura-imposible
+      description: Entrada inválida; que no invente un número.
+      input: "Peso 70 kg y mido 0 m"
+      expect:
+        not_contains: ["inf", "nan"]
+      judge: [admite-el-error]
+      tags: [limites]

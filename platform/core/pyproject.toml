@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-core"
+version = "0.1.0"
+description = "Contracts, declarative schemas, config resolution and registries for the agent platform."
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+# Spans over OTLP/HTTP. The range is kept wide on purpose: kagent's BYO SDK pins
+# opentelemetry below 1.39, and this package must install next to it.
+tracing = [
+    "opentelemetry-sdk>=1.38",
+    "opentelemetry-exporter-otlp-proto-http>=1.38",
+]
+dev = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_core"]

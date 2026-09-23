@@ -1,0 +1,31 @@
+# Production: strict guardrails everywhere, tight budgets, and no tool may be
+# added by an agent manifest that this file does not allow.
+
+agentDefaults:
+  guardrails:
+    profile: strict
+  policies:
+    profile: frugal
+  permissions:
+    tools:
+      deny:
+        - "debug.*"
+        - "*.experimental"
+
+workflowDefaults:
+  guardrails:
+    profile: strict
+  policies:
+    profile: frugal
+
+# Per-agent overrides win over everything above.
+agents:
+  health-advisor:
+    model:
+      profile: precise
+    policies:
+      max_tool_calls: 6
+
+  software-manager:
+    policies:
+      profile: standard

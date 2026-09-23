@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-kagent"
+version = "0.1.0"
+description = "Runs catalogue agents on kagent: renders its CRDs from the manifests, and hosts BYO agents."
+requires-python = ">=3.10"
+# Rendering is pure: YAML in, YAML out. It needs neither kagent nor a cluster.
+dependencies = [
+    "agent-core==0.1.0",
+    "agent-runtime==0.1.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+# What the agent-host image installs to serve a manifest as a kagent BYO agent.
+# LangGraph and not ADK: kagent-adk 0.10 pins google-adk<2, and the platform's
+# ADK runtime is on 2.x. kagent-langgraph has no such pin, and LangChain 1.x
+# agents are LangGraph graphs, so it serves both.
+host = [
+    "kagent-langgraph==0.10.1",
+    # kagent 0.10 is written against a2a-sdk 0.3; 1.x moved its modules.
+    "a2a-sdk[http-server]>=0.3.26,<1",
+    "agent-runtime-langgraph[tracing]==0.1.0",
+    "agent-runtime-langchain[tracing]==0.1.0",
+    "uvicorn>=0.30",
+]
+dev = ["pytest>=8.0"]
+
+[project.entry-points."agent_platform.commands"]
+"kagent" = "agent_kagent.cli:register"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_kagent"]

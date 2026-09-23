@@ -1,0 +1,3 @@
+# MLflow con cliente S3: la imagen oficial no trae boto3 y los artefactos van a MinIO.
+FROM ghcr.io/mlflow/mlflow:v3.16.1
+RUN pip install --no-cache-dir "boto3>=1.34"
