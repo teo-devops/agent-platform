@@ -228,7 +228,7 @@ la demo enseña los dos:
   (`FROM scratch` + la carpeta) en el registro del laboratorio, y un init
   container de kagent la deja en `/skills/<nombre>` antes de arrancar el agente.
   Imágenes y no S3: el init container de kagent usa el cliente S3 de AWS sin
-  *path-style*, y MinIO no lo sirve sin DNS comodín.
+  *path-style*, y SeaweedFS no lo sirve sin DNS comodín.
 
 ## Evals: dos puertas, no una
 

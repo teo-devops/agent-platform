@@ -1,12 +1,12 @@
-# MinIO (artefactos) + MLflow (trazas, prompts, versiones, evals) + collector OTel.
+# SeaweedFS (artefactos) + MLflow (trazas, prompts, versiones, evals) + collector OTel.
 #
-# El flujo: agente --OTLP gRPC--> collector --OTLP HTTP--> MLflow --> MinIO.
+# El flujo: agente --OTLP gRPC--> collector --OTLP HTTP--> MLflow --> SeaweedFS.
 # Ningún agente sabe que existe MLflow: sólo hablan OpenTelemetry.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: observability
 resources:
-  - minio/minio.yaml
+  - seaweedfs/seaweedfs.yaml
   - mlflow/mlflow.yaml
   - otel-collector/collector.yaml
 configMapGenerator:

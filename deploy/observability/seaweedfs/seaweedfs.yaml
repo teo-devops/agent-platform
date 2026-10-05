@@ -1,0 +1,134 @@
+# SeaweedFS: almacén S3 de los artefactos de MLflow. Credenciales de laboratorio.
+#
+# Un solo `weed server` (master + volume + filer + gateway S3 en :9000) y, al
+# lado, la consola web (`weed admin`, :23646). Sustituye a MinIO, cuyas imágenes
+# oficiales en quay.io dejaron de ser públicas.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: seaweedfs
+stringData:
+  AWS_ACCESS_KEY_ID: seaweedadmin
+  AWS_SECRET_ACCESS_KEY: seaweedadmin
+  # Identidades del gateway S3: sólo la de administración.
+  s3.json: |
+    {
+      "identities": [
+        {
+          "name": "admin",
+          "credentials": [{ "accessKey": "seaweedadmin", "secretKey": "seaweedadmin" }],
+          "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seaweedfs
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 2Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seaweedfs
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/name: seaweedfs } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: seaweedfs }
+    spec:
+      securityContext: { runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, runAsNonRoot: true }
+      containers:
+        - name: seaweedfs
+          image: docker.io/chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+          env:
+            - { name: POD_IP, valueFrom: { fieldRef: { fieldPath: status.podIP } } }
+          # Volúmenes pequeños: el PVC es de 2 GiB y cada bucket es una colección.
+          command: ["weed"]
+          args:
+            - server
+            - -dir=/data
+            - -ip=$(POD_IP)
+            - -ip.bind=0.0.0.0
+            - -master.volumeSizeLimitMB=128
+            - -volume.max=16
+            - -s3
+            - -s3.port=9000
+            - -s3.config=/config/s3.json
+          ports:
+            - { name: s3, containerPort: 9000 }
+            - { name: master, containerPort: 9333 }
+            - { name: master-grpc, containerPort: 19333 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9000 }
+            periodSeconds: 5
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: config, mountPath: /config, readOnly: true }
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 512Mi }
+        # Consola web; se entra con las credenciales de arriba.
+        - name: admin
+          image: docker.io/chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+          command: ["weed"]
+          args:
+            - admin
+            - -ip=0.0.0.0
+            - -port=23646
+            - -master=localhost:9333
+            - -dataDir=/admin
+            - -adminUser=$(AWS_ACCESS_KEY_ID)
+            - -adminPassword=$(AWS_SECRET_ACCESS_KEY)
+          envFrom: [{ secretRef: { name: seaweedfs } }]
+          ports: [{ name: console, containerPort: 23646 }]
+          volumeMounts: [{ name: admin, mountPath: /admin }]
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - { name: data, persistentVolumeClaim: { claimName: seaweedfs } }
+        - { name: config, secret: { secretName: seaweedfs, items: [{ key: s3.json, path: s3.json }] } }
+        - { name: admin, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs
+spec:
+  type: NodePort
+  selector: { app.kubernetes.io/name: seaweedfs }
+  ports:
+    - { name: s3, port: 9000, targetPort: 9000 }
+    - { name: console, port: 23646, targetPort: 23646, nodePort: 30901 }
+    # Para el `weed shell` del Job de buckets.
+    - { name: master, port: 9333, targetPort: 9333 }
+    - { name: master-grpc, port: 19333, targetPort: 19333 }
+---
+# El bucket de MLflow. Idempotente: `s3.bucket.create` sobre uno existente no
+# hace nada, y el listado final hace fallar el Job si falta.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-buckets
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext: { runAsUser: 1000, runAsNonRoot: true }
+      containers:
+        - name: shell
+          image: docker.io/chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+          env: [{ name: HOME, value: /tmp }]
+          command: ["sh", "-c"]
+          args:
+            - echo "s3.bucket.create -name mlflow" | weed shell -master=seaweedfs:9333 &&
+              echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 | grep -Eq '^\s*mlflow\s'
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]

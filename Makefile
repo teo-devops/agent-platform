@@ -373,7 +373,7 @@ ui-urls:
 	@echo "  MLflow trazas     $(MLFLOW_URL)/#/experiments/0/traces"
 	@echo "  MLflow versiones  $(MLFLOW_URL)/#/experiments/0/models"
 	@echo "  MLflow prompts    $(MLFLOW_URL)/#/prompts"
-	@echo "  MinIO             http://localhost:9901   (minioadmin / minioadmin)"
+	@echo "  SeaweedFS         http://localhost:9901   (seaweedadmin / seaweedadmin)"
 	@echo "  ADK Dev UI        http://localhost:8000/dev-ui/?app=$(subst -,_,$(AGENT))   (make dev-adk)"
 	@echo "  LangGraph Studio  https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024   (make dev-langgraph | dev-langchain)"
 	@echo "  MCP               http://localhost:8001/   (make mcp; clientes MCP: /mcp)"

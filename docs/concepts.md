@@ -49,7 +49,7 @@ alguien lo escribe y alguien lo revisa.
 | `hexagonal-architecture` | **Skill** (`SKILL.md`) | La leen desarrollador y revisor cuando el código toca infraestructura |
 | OTel Collector | Traductor de telemetría | Recibe OTLP de todos y lo entrega a MLflow |
 | MLflow | Backend de AgentOps | Trazas, Prompt Registry, versiones de agente, evals, métricas |
-| MinIO | Almacén S3 | Artefactos de MLflow |
+| SeaweedFS | Almacén S3 | Artefactos de MLflow |
 
 ## Cómo viaja una petición
 

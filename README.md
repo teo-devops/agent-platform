@@ -287,7 +287,7 @@ flowchart LR
         subgraph NS_O["ns observability"]
             OTEL["OTel Collector :4317"]
             MLS["MLflow :5500"]
-            MINIO[("MinIO :9901")]
+            SEAWEED[("SeaweedFS :9901")]
         end
     end
 
@@ -297,7 +297,7 @@ flowchart LR
     CTRL -->|A2A| PDP & CRP
     CRP -->|MCP code.*| MCPS
     SMP & CRP & PDP -. trazas .-> OTEL
-    OTEL --> MLS --> MINIO
+    OTEL --> MLS --> SEAWEED
 ```
 
 | Modo | Quién ejecuta el agente | Lo que aprovecha | Límite |
@@ -334,7 +334,7 @@ y `cluster-up.sh` lo comprueban antes de arrancar.
 | Local | `make dev-adk` · `dev-langgraph` · `mcp` · `mcp-inspector` | 8000 · 2024 · 8001 · 6274 |
 | A2A local | `make a2a-up` | 9101 · 9102 · 9103 |
 | MLflow sin clúster | `make mlflow-local` | 5500 |
-| Clúster | `make lab` | 8082 (kagent) · 5500 (MLflow) · 9901 (MinIO) · 5001 (registro) · 8083 (`make kagent-a2a`) |
+| Clúster | `make lab` | 8082 (kagent) · 5500 (MLflow) · 9901 (SeaweedFS) · 5001 (registro) · 8083 (`make kagent-a2a`) |
 
 Los carriles local y clúster no comparten puertos salvo el 5500, que es a
 propósito. Todo lo que habla con Kubernetes va contra el contexto
@@ -489,7 +489,7 @@ salto es A2A: nadie construye copias de los hijos dentro de su pod.
 | └ Versiones de agente | http://localhost:5500/#/experiments/0/models | | Un `LoggedModel` por `nombre@versión` |
 | └ Prompts | http://localhost:5500/#/prompts | | Prompt Registry: una versión por texto distinto |
 | └ Runs (evals, métricas) | http://localhost:5500/#/experiments/0/runs | | `make eval-run`, `make metrics` |
-| **MinIO** | http://localhost:9901 | `make lab` | Artefactos de MLflow (`minioadmin` / `minioadmin`) |
+| **SeaweedFS** | http://localhost:9901 | `make lab` | Artefactos de MLflow (`seaweedadmin` / `seaweedadmin`) |
 | **ADK Dev UI** | http://localhost:8000/dev-ui/?app=python_developer | `make dev-adk` | Playground de ADK, 100 % local: todo el catálogo en el desplegable, con guardrails y permisos activos |
 | **LangGraph Studio** | https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024 | `make dev-langgraph` · `make dev-langchain` | El grafo de cada agente; la UI se sirve desde smith.langchain.com |
 | └ API de LangGraph | http://127.0.0.1:2024/docs | | La misma API, sin la UI remota |
@@ -528,7 +528,7 @@ agent-platform/
 │
 ├── deploy/                    LO QUE LO OPERA
 │   ├── kind/                  el clúster del laboratorio
-│   ├── observability/         MinIO + MLflow + OTel Collector (kustomize)
+│   ├── observability/         SeaweedFS + MLflow + OTel Collector (kustomize)
 │   ├── kagent/                values de Helm y release.yaml (qué agentes, en qué modo)
 │   ├── images/                Dockerfiles: agent-host, mcp, mlflow, skill
 │   └── scripts/
@@ -571,7 +571,7 @@ el caso corre igual y te lo dice al final.
 ### Carril clúster — kagent + MLflow
 
 ```bash
-make lab                       # kind + registro local + MLflow/MinIO/collector + kagent + agentes
+make lab                       # kind + registro local + MLflow/SeaweedFS/collector + kagent + agentes
 make status
 ```
 
