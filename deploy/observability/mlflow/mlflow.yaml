@@ -1,5 +1,5 @@
 # MLflow: trazas (OTLP), Prompt Registry, versiones de agente y runs de eval.
-# Metadatos en SQLite (un PVC), artefactos en MinIO. Para producción, Postgres.
+# Metadatos en SQLite (un PVC), artefactos en SeaweedFS. Para producción, Postgres.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -39,9 +39,9 @@ spec:
             # Lo alcanzan el navegador (localhost:5500), el collector y agentctl.
             - --allowed-hosts=*
           env:
-            - { name: MLFLOW_S3_ENDPOINT_URL, value: "http://minio:9000" }
-            - { name: AWS_ACCESS_KEY_ID, valueFrom: { secretKeyRef: { name: minio, key: AWS_ACCESS_KEY_ID } } }
-            - { name: AWS_SECRET_ACCESS_KEY, valueFrom: { secretKeyRef: { name: minio, key: AWS_SECRET_ACCESS_KEY } } }
+            - { name: MLFLOW_S3_ENDPOINT_URL, value: "http://seaweedfs:9000" }
+            - { name: AWS_ACCESS_KEY_ID, valueFrom: { secretKeyRef: { name: seaweedfs, key: AWS_ACCESS_KEY_ID } } }
+            - { name: AWS_SECRET_ACCESS_KEY, valueFrom: { secretKeyRef: { name: seaweedfs, key: AWS_SECRET_ACCESS_KEY } } }
           ports: [{ name: http, containerPort: 5000 }]
           readinessProbe:
             httpGet: { path: /health, port: 5000 }

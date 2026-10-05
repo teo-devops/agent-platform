@@ -2,7 +2,7 @@
 #
 #   http://localhost:8082   kagent UI
 #   http://localhost:5500   MLflow
-#   http://localhost:9901   consola de MinIO
+#   http://localhost:9901   consola de SeaweedFS
 #
 # El registro `agent-registry` (localhost:5001) lo crea `make cluster-up`; aquí
 # sólo se le dice a containerd dónde buscar la configuración de espejos.
@@ -25,4 +25,4 @@ nodes:
     extraPortMappings:
       - { containerPort: 30080, hostPort: 8082, protocol: TCP }   # kagent UI
       - { containerPort: 30500, hostPort: 5500, protocol: TCP }   # MLflow
-      - { containerPort: 30901, hostPort: 9901, protocol: TCP }   # MinIO console
+      - { containerPort: 30901, hostPort: 9901, protocol: TCP }   # SeaweedFS console

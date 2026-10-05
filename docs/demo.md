@@ -23,7 +23,7 @@ la primera diapositiva.
 cd agent-platform
 make install
 cp .env.example .env            # GOOGLE_API_KEY=...  (también la lee el clúster)
-make lab                        # kind + registro + MLflow + MinIO + collector + kagent + agentes (~10 min)
+make lab                        # kind + registro + MLflow + SeaweedFS + collector + kagent + agentes (~10 min)
 make status                     # los tres agentes Ready; catalog-tools ACCEPTED True
 ```
 
