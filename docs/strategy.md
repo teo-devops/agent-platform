@@ -117,7 +117,7 @@ plataforma*, no un framework. Por eso entra como **backend**, no como concepto.
 | 2.2 | Grupo `agent_platform.sandboxes`; backend `local` (Docker: sin red por defecto, raíz de sólo lectura, `nobody`, sin capabilities, tmpfs) en `platform/sandboxes/local` | ✅ |
 | 2.3 | Tools `sandbox.exec`, `sandbox.run_python`, `sandbox.write_file`, `sandbox.read_file`, ligadas a cada agente y sujetas a `permissions.tools` | ✅ |
 | 2.4 | Agente de ejemplo `python-executor` (`make caso-10`); `kagent render` rechaza un agente con sandbox en modo declarativo | ✅ |
-| 2.5 | Backend `openshell` (`platform/sandboxes/openshell`): `render_policy` + CLI v0.1.x; `agentctl openshell policy` para auditar | ✅ código y tests con CLI simulado · ⏳ prueba con gateway real |
+| 2.5 | Backend `openshell` (`platform/sandboxes/openshell`): `render_policy` + CLI v0.1.x; `agentctl openshell policy` para auditar | ✅ verificado con OpenShell 0.1.5 (Landlock, egress por host, suite de `python-executor`) |
 | 2.5b | Backend `sbx` (Docker Sandboxes, microVM por sandbox) en `platform/sandboxes/sbx` | ✅ verificado con sbx v0.42 |
 | 2.5c | El proveedor lo elige el entorno (`sandbox.backend`, `AGENT_SANDBOX_BACKEND`), [ADR 0006](adr/0006-sandbox-es-decision-de-entorno.md) | ✅ |
 | 2.6 | Backend `k8s`: pod por sandbox con gVisor/Kata (o el CRD `agent-sandbox` de Kubernetes SIGs), para el carril clúster y los agentes BYO | ⏳ |

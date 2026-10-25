@@ -318,15 +318,15 @@ avisa al abrir; lo que **rebajaría** el aislamiento declarado, lo rechaza:
 | Del spec | `local` (contenedor) | `sbx` (microVM) | `openshell` |
 |---|---|---|---|
 | Frontera | kernel compartido con el host | **kernel propio** por sandbox | Landlock + seccomp, política **fuera** del proceso |
-| `filesystem.write` / `read` | `tmpfs` por ruta; imagen `--read-only` | rutas creadas en la VM; nada del host montado; reglas de ficheros de sbx fijas (aviso) | `filesystem_policy`, Landlock `hard_requirement` |
-| egress deny sin hosts | `--network none` | regla `deny **` por sandbox (proxy: un TCP se acepta pero no llegan datos) | sin reglas = todo denegado |
-| `egress.allow: [hosts]` | ❌ red completa, con aviso | ❌ **rechazado** si la política global permite `**` (es el valor por defecto): no se puede restringir por sandbox | ✅ una regla por host |
+| `filesystem.write` / `read` | `tmpfs` por ruta; imagen `--read-only` | rutas creadas en la VM; nada del host montado; reglas de ficheros de sbx fijas (aviso) | `filesystem_policy`, Landlock `hard_requirement` (verificado: niega `/home/sandbox` aunque sea del usuario) |
+| egress deny sin hosts | `--network none` | regla `deny **` por sandbox (proxy: un TCP se acepta pero no llegan datos) | sin reglas = todo denegado; `connect()` falla con `EACCES`, TCP directo incluido |
+| `egress.allow: [hosts]` | ❌ red completa, con aviso | ❌ **rechazado** si la política global permite `**` (es el valor por defecto): no se puede restringir por sandbox | ✅ una regla por host (verificado: pypi.org 200, example.com denegado, `pip download` funciona) |
 | `egress.default: allow` | red completa (aviso) | lo que permita la política global (aviso) | ❌ rechazado |
 | `process` | `nobody`, `--cap-drop ALL`, `--pids-limit` | la VM es la frontera; dentro hay `sudo` (aviso) | UID 1000, nunca root |
-| `inference.route` | sólo `none` | sbx gestiona las claves en su proxy; la plataforma no enruta (aviso) | `platform` → `--provider`; `direct` rechazado |
-| `resources` | `--cpus`, `--memory` | `--cpus` (enteros), `-m` (mínimo 1 GiB) | sin campo (aviso) |
+| `inference.route` | sólo `none` | sbx gestiona las claves en su proxy; la plataforma no enruta (aviso) | `platform` → `--provider`; `none` → `--no-auto-providers`; `direct` rechazado |
+| `resources` | `--cpus`, `--memory` | `--cpus` (enteros), `-m` (mínimo 1 GiB) | `--cpu`, `--memory` (mismas unidades que el spec) |
 | Comando atascado | timeout del CLI + `kill` | `timeout` dentro de la VM | `timeout` dentro del sandbox |
-| Verificado en esta máquina | ✅ | ✅ (sbx v0.42) | ⏳ con CLI simulado; la prueba real necesita el gateway instalado |
+| Verificado en esta máquina | ✅ | ✅ (sbx v0.42) | ✅ (OpenShell 0.1.5: la política efectiva es la generada; suite de `python-executor` 6/6) |
 
 Los tres usan la imagen `agent-platform/sandbox:0.1.0` (`make sandbox-image`:
 UID 1000 y `/workspace`), salvo `sbx`, que usa su plantilla `shell`.

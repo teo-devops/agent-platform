@@ -19,8 +19,15 @@ How each part of the spec is honoured:
     network.egress          deny by default; one network rule per allowed host
     process                 run as UID/GID 1000; never root
     inference.route         platform -> --provider $AGENT_OPENSHELL_PROVIDER
+                            none     -> --no-auto-providers: no credentials at all
                             direct   -> refused: it would put keys in the sandbox
-    resources.cpu/memory    no policy field: warned
+    resources.cpu/memory    --cpu / --memory (same Kubernetes units as the spec)
+
+Verified against a real gateway (OpenShell 0.1.5): the effective policy
+(`sandbox get --policy-only`) is exactly what render_policy produces; a path
+the Unix permissions allow but the policy does not (`/home/sandbox`) is denied,
+so it is Landlock and not file modes doing it; and an outbound connection is
+refused at connect(), raw TCP included.
 """
 
 from __future__ import annotations
@@ -61,12 +68,15 @@ DEFAULT_TTL = 3600
 READY_TIMEOUT = 180
 #: Prefix of every sandbox this backend creates.
 NAME_PREFIX = "ap-"
+#: OpenShell 0.1.5 rejects longer sandbox names ("name exceeds maximum length").
+MAX_NAME = 19
 #: Provider (credentials) attached when `inference.route: platform`.
 PROVIDER_VARIABLE = "AGENT_OPENSHELL_PROVIDER"
 #: Exit code of coreutils `timeout` when the command ran out of time.
 TIMEOUT_EXIT = 124
 
-__all__ = ["OpenShellSandbox", "OpenShellSession", "__version__", "create_args", "render_policy", "warnings"]
+__all__ = ["OpenShellSandbox", "OpenShellSession", "__version__", "create_args", "render_policy",
+           "sandbox_name", "warnings"]
 
 
 def render_policy(spec: SandboxSpec) -> dict[str, Any]:
@@ -124,21 +134,35 @@ def warnings(spec: SandboxSpec) -> list[str]:
                      f"{NETWORK_BINARIES}: the spec does not restrict which executables connect")
     if spec.process.max_procs:
         found.append("process.max_procs has no OpenShell policy field")
-    if spec.resources.cpu or spec.resources.memory:
-        found.append("resources.cpu/memory have no OpenShell policy field; the gateway's defaults apply")
     if spec.inference.route == "platform" and not os.getenv(PROVIDER_VARIABLE):
         found.append(f"inference.route 'platform' without {PROVIDER_VARIABLE}: no provider is attached, "
                      f"so the sandbox cannot reach any model")
     return found
 
 
+def sandbox_name(agent: str) -> str:
+    """``ap-<agent>-<6 hex>``, with the agent cut so the whole fits in :data:`MAX_NAME`."""
+    suffix = uuid.uuid4().hex[:6]
+    room = MAX_NAME - len(NAME_PREFIX) - len(suffix) - 1
+    slug = "".join(c if c.isalnum() else "-" for c in agent.lower())[:room].strip("-") or "agent"
+    return f"{NAME_PREFIX}{slug}-{suffix}"
+
+
 def create_args(spec: SandboxSpec, *, name: str, policy_file: str) -> list[str]:
     """The ``openshell sandbox create`` arguments. Pure, so it can be tested."""
     args = ["sandbox", "create", "--name", name, "--from", spec.image or DEFAULT_IMAGE,
             "--policy", policy_file, "--detach"]
+    if spec.resources.cpu:
+        args += ["--cpu", spec.resources.cpu]
+    if spec.resources.memory:
+        args += ["--memory", spec.resources.memory]
     provider = os.getenv(PROVIDER_VARIABLE)
     if spec.inference.route == "platform" and provider:
         args += ["--provider", provider]
+    else:
+        # Without this the gateway may attach providers on its own, and the
+        # sandbox would get credentials its profile never asked for.
+        args.append("--no-auto-providers")
     return [*args, "--", "sleep", str(spec.resources.ttl_seconds or DEFAULT_TTL)]
 
 
@@ -164,7 +188,7 @@ class OpenShellSandbox:
         for warning in warnings(spec):
             log_event(logger, "sandbox spec not fully enforceable with openshell", agent=agent, detail=warning)
 
-        sandbox = f"{NAME_PREFIX}{agent}-{uuid.uuid4().hex[:6]}"
+        sandbox = sandbox_name(agent)
         with tempfile.NamedTemporaryFile("w", suffix=".yaml", prefix="openshell-policy-", delete=False) as handle:
             yaml.safe_dump(policy, handle, sort_keys=False)
         try:

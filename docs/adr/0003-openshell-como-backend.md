@@ -46,8 +46,18 @@ Las dos, en ese orden y sin mezclarlas:
 | `network.egress.allow` | una regla por host (puerto 443 o el indicado), para los binarios de `/usr/bin` y `/usr/local/bin`; comodines de al menos 3 etiquetas |
 | `network.egress.default: allow` | **rechazado** |
 | `inference.route: platform` / `direct` | `--provider $AGENT_OPENSHELL_PROVIDER` / **rechazado** |
-| `resources.cpu/memory`, `process.max_procs` | sin campo en la política: se avisa |
+| `resources.cpu/memory` | `--cpu`, `--memory` en `sandbox create` |
+| `process.max_procs` | sin campo en la política: se avisa |
+| `inference.route: none` | `--no-auto-providers`: el gateway no adjunta credenciales por su cuenta |
 
 El backend usa el CLI (`sandbox create --policy --detach`, `sandbox exec -n
 --no-tty`, `sandbox delete`), no el SDK, cuya documentación no cubre ni la
 política ni el código de salida.
+
+## Verificado (OpenShell 0.1.5, gateway local)
+
+- `openshell sandbox get --policy-only` devuelve exactamente la política de `render_policy`.
+- Landlock actúa: se niega `/home/sandbox`, aunque es del UID 1000 y sus permisos Unix lo permitirían; `/var` y `/root` tampoco son accesibles.
+- Red denegada en `connect()` (`EACCES`), incluido TCP directo. Con `egress.allow`, sólo esos hosts responden.
+- OpenShell limita el nombre del sandbox a 19 caracteres; `sandbox_name()` lo respeta.
+- Crear un sandbox tarda unos 0,5 s con la imagen en local.

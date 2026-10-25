@@ -12,7 +12,14 @@ from agent_core.sandbox import LazySandbox, SandboxError, sandbox_tools
 from agent_core.schemas import PermissionSpec, SandboxSpec
 
 pytest.importorskip("agent_sandbox_openshell")
-from agent_sandbox_openshell import OpenShellSandbox, create_args, render_policy, warnings  # noqa: E402
+from agent_sandbox_openshell import (  # noqa: E402
+    MAX_NAME,
+    OpenShellSandbox,
+    create_args,
+    render_policy,
+    sandbox_name,
+    warnings,
+)
 
 from . import fake_cli  # noqa: E402
 
@@ -59,7 +66,21 @@ def test_what_would_weaken_the_sandbox_is_refused(spec, error):
 
 def test_what_has_no_policy_field_is_said_out_loud():
     found = " ".join(warnings(_spec(process={"max_procs": 8}, resources={"memory": "1Gi"})))
-    assert "max_procs" in found and "cpu/memory" in found
+    assert "max_procs" in found and "memory" not in found, "cpu/memory sí se aplican, con --cpu/--memory"
+
+
+def test_resources_and_credentials_are_explicit():
+    args = create_args(_spec(resources={"cpu": "500m", "memory": "512Mi"}), name="ap-x", policy_file="/p.yaml")
+    assert args[args.index("--cpu") + 1] == "500m" and args[args.index("--memory") + 1] == "512Mi"
+    assert "--no-auto-providers" in args, "sin inferencia, ninguna credencial entra sola"
+
+
+@pytest.mark.parametrize("agent", ["probe", "python-executor", "a-very-long-agent-name-of-the-catalogue"])
+def test_sandbox_names_fit_openshell_limit(agent):
+    """OpenShell rechaza nombres de más de 19 caracteres; python-executor ya lo superaba."""
+    name = sandbox_name(agent)
+    assert len(name) <= MAX_NAME and name.startswith("ap-")
+    assert sandbox_name(agent) != name, "dos sandboxes del mismo agente no chocan"
 
 
 def test_create_uses_the_policy_the_image_and_a_provider_only_for_platform(monkeypatch):
@@ -68,6 +89,7 @@ def test_create_uses_the_policy_the_image_and_a_provider_only_for_platform(monke
     assert args[args.index("--policy") + 1] == "/p.yaml"
     assert args[args.index("--provider") + 1] == "nvidia"
     assert "--provider" not in create_args(_spec(), name="ap-x", policy_file="/p.yaml")
+    assert "--no-auto-providers" not in args
     assert args[-3:-1] == ["--", "sleep"]
 
 
@@ -121,6 +143,9 @@ def test_a_real_openshell_sandbox_runs_code_under_its_policy():
             "except Exception:\n    print('offline')"
         )
         assert offline["stdout"].strip() == "offline"
-        assert tools["sandbox.exec"]("touch /usr/x")["exit_code"] != 0, "Landlock: /usr es de sólo lectura"
+        assert tools["sandbox.exec"]("touch /usr/x")["exit_code"] != 0, "/usr es de sólo lectura"
+        # /home/sandbox es del usuario del sandbox: si se niega, lo niega Landlock, no los permisos Unix.
+        assert tools["sandbox.exec"]("touch /home/sandbox/x")["exit_code"] != 0
+        assert tools["sandbox.exec"]("touch /workspace/x")["exit_code"] == 0
     finally:
         sandbox.close()
