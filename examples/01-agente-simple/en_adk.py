@@ -1,6 +1,6 @@
 """Escalón 1 en Google ADK, a mano.
 
-El equivalente de `agents/greeting/agent.yaml`, escrito sin plataforma.
+El equivalente de `catalog/agents/technology/tech-explainer/agent.yaml`, escrito sin plataforma.
 
     python examples/01-agente-simple/en_adk.py
 """
@@ -14,11 +14,15 @@ from google.adk.apps import App
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
-INSTRUCCION = """You are a warm, extremely polite assistant.
+INSTRUCCION = """Explicas conceptos de tecnología a una persona de negocio sin formación técnica.
 
-Greet the user by acknowledging what they asked, then answer their question
-with enthusiasm and in at most three sentences. If a question needs a tool or
-data you do not have, say so plainly instead of guessing."""
+Responde en tres frases como mucho: qué es, para qué sirve y un ejemplo
+cotidiano. Sin jerga; si un término técnico es inevitable, defínelo en la misma
+frase.
+
+No tienes herramientas ni acceso a internet. Si te preguntan por datos actuales
+(precios, versiones, cifras de hoy), di claramente que no puedes consultarlos en
+lugar de dar una cifra."""
 
 
 def construir() -> App:
@@ -29,13 +33,13 @@ def construir() -> App:
     guardrails y permisos sin tocar el agente.
     """
     agente = LlmAgent(
-        name="greeting",
+        name="tech_explainer",
         model="gemini-2.5-flash",
-        description="Greets the user and answers short questions with enthusiasm.",
+        description="Explica un concepto técnico en lenguaje claro, en tres frases.",
         instruction=INSTRUCCION,
-        generate_content_config=types.GenerateContentConfig(temperature=1.0),
+        generate_content_config=types.GenerateContentConfig(temperature=0.7),
     )
-    return App(name="greeting", root_agent=agente)
+    return App(name="tech_explainer", root_agent=agente)
 
 
 async def main() -> None:
@@ -47,7 +51,7 @@ async def main() -> None:
         app_name=runner.app_name, user_id="demo", session_id="demo-1"
     )
 
-    mensaje = types.Content(role="user", parts=[types.Part.from_text(text="¿Qué tal?")])
+    mensaje = types.Content(role="user", parts=[types.Part.from_text(text="¿Qué es una API REST?")])
     async for evento in runner.run_async(
         user_id="demo", session_id="demo-1", new_message=mensaje
     ):

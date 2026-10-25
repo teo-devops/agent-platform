@@ -37,9 +37,9 @@ def test_the_catalogue_publishes_its_tools(registries):
     tocar, ni reinstalar. Lo que sí sigue llegando por entry point son los
     plugins, que son código de plataforma y no contenido.
     """
-    assert "health.calculate_bmi" in registries.tools.keys()
-    assert callable(registries.tools.get("health.calculate_bmi"))
-    assert registries.tools.component("health.calculate_bmi").source.startswith("catalog:")
+    assert "release.next_version" in registries.tools.keys()
+    assert callable(registries.tools.get("release.next_version"))
+    assert registries.tools.component("release.next_version").source.startswith("catalog:")
 
     # Lo privado y lo importado de otro módulo no se publica.
     assert not [ref for ref in registries.tools.keys() if ref.split(".")[-1].startswith("_")]

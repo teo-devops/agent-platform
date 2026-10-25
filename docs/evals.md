@@ -8,11 +8,20 @@ cambiar un prompt produce un número comparable con el de antes.
 
 ## Cómo se escribe una suite
 
+La suite de un agente vive **dentro de su carpeta**, y se llama como él:
+
 ```
-evals/<objetivo>/
-  dataset.yaml    # los casos: qué se pide y qué debe cumplir
-  judges.yaml     # los criterios que evalúa un modelo
+catalog/agents/<dominio>/<agente>/
+  agent.yaml
+  prompt.md
+  evals/
+    dataset.yaml    # los casos: qué se pide y qué debe cumplir
+    judges.yaml     # los criterios que evalúa un modelo
 ```
+
+Un agente y lo que demuestra que funciona son un solo directorio: al moverlo,
+renombrarlo o borrarlo, su suite va con él. `spec.target` del dataset tiene que
+ser el propio agente; `agentctl eval --check` lo comprueba.
 
 Están separados por la misma razón que el resto del repositorio separa
 manifiesto y perfiles: los **casos** crecen cada vez que aparece un fallo nuevo,
@@ -42,7 +51,7 @@ estructura, si la respuesta se ha inventado algo.
 
 ## El juez es un agente más
 
-Vive en [`catalog/agents/quality/eval-judge`](../catalog/agents/quality/eval-judge/),
+Vive en [`catalog/agents/platform/eval-judge`](../catalog/agents/platform/eval-judge/),
 se construye con la misma fábrica que todo lo demás y corre en el runtime que le
 digas. No hay una superficie de protocolo nueva para esto, y el juez se versiona,
 se revisa y —si hiciera falta— se evalúa como cualquier otro agente.
@@ -54,10 +63,10 @@ ejecuciones, que es exactamente para lo que existe.
 
 ```bash
 agentctl eval --all --check                  # valida las suites, sin ejecutar nada
-agentctl eval greeting                       # todo
-agentctl eval greeting --no-judge            # sólo aserciones deterministas
-agentctl eval greeting --tag humo            # un subconjunto
-agentctl --runtime langgraph eval greeting   # ¿se comporta igual en otro framework?
+agentctl eval release-manager                       # todo
+agentctl eval release-manager --no-judge            # sólo aserciones deterministas
+agentctl eval tech-explainer --tag humo             # un subconjunto
+agentctl --runtime langgraph eval release-manager   # ¿se comporta igual en otro framework?
 ```
 
 Devuelve `pass_at_1` y código ≠0 si no llega al umbral. Eso es lo que lo

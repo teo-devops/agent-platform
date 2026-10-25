@@ -13,24 +13,30 @@ sitio para empezar: te acostumbras a la forma de cada uno sin nada que distraiga
 
 ## En la plataforma
 
-[`agents/greeting/agent.yaml`](../../agents/greeting/agent.yaml). Fíjate en que
+[`tech-explainer`](../../catalog/agents/technology/tech-explainer/agent.yaml):
+explica un concepto técnico a alguien de negocio, en tres frases. Fíjate en que
 el prompt vive en un `.md` aparte y lleva una variable:
 
 ```yaml
 spec:
   model:
-    profile: creative        # perfil, no un modelo concreto
+    profile: balanced        # perfil, no un modelo concreto
   prompt:
     file: prompt.md
     variables:
-      persona: "warm, extremely polite assistant"
+      audiencia: "una persona de negocio sin formación técnica"
   permissions:
     profile: no-tools        # no alcanza nada, y se comprueba al construir
 ```
 
+Cambiar la audiencia (`"un desarrollador junior"`) es una línea de YAML, no un
+prompt nuevo. Y su suite de evals vive al lado, en
+[`evals/`](../../catalog/agents/technology/tech-explainer/evals/): entre otras
+cosas comprueba que no se invente un precio que no puede saber.
+
 ```bash
-agentctl run greeting -m "¿qué tal?"
-agentctl --runtime langgraph run greeting -m "¿qué tal?"
+agentctl run tech-explainer -m "¿Qué es una API REST?"
+agentctl --runtime langgraph run tech-explainer -m "¿Qué es una API REST?"
 ```
 
 ## A mano
@@ -44,6 +50,6 @@ agentctl --runtime langgraph run greeting -m "¿qué tal?"
 
 ## Lo que conviene llevarse
 
-El perfil de modelo (`creative`) en vez del nombre del modelo. Cuando dentro de
+El perfil de modelo (`balanced`) en vez del nombre del modelo. Cuando dentro de
 seis meses haya que mover toda la flota a otro modelo, es una línea en
 `configs/models.yaml` y no una búsqueda por todo el repositorio.

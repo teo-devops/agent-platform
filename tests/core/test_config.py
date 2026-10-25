@@ -36,39 +36,39 @@ def test_render_template_substitutes_prompt_variables():
 
 
 def test_agent_inherits_profiles_from_defaults(store: ConfigStore):
-    greeting = store.load_agent("greeting")
-    # 'creative' is declared by the agent, and its values come from configs/models.yaml
-    assert greeting.spec.model.profile == "creative"
-    assert greeting.spec.model.name == "gemini-2.5-flash"
-    assert greeting.spec.model.temperature == 1.0
+    explainer = store.load_agent("tech-explainer")
+    # 'balanced' is declared by the agent, and its values come from configs/models.yaml
+    assert explainer.spec.model.profile == "balanced"
+    assert explainer.spec.model.name == "gemini-2.5-flash"
+    assert explainer.spec.model.temperature == 0.7
     # guardrails/policies were never mentioned by the agent: they come from defaults
-    assert greeting.spec.policies.profile == "relaxed"  # local overlay
-    assert greeting.spec.guardrails.input
+    assert explainer.spec.policies.profile == "relaxed"  # local overlay
+    assert explainer.spec.guardrails.input
 
 
 def test_prompt_file_and_variables_are_resolved(store: ConfigStore):
-    greeting = store.load_agent("greeting")
-    assert "warm, extremely polite assistant" in greeting.spec.prompt.instruction
-    assert "{{" not in greeting.spec.prompt.instruction
+    explainer = store.load_agent("tech-explainer")
+    assert "una persona de negocio sin formación técnica" in explainer.spec.prompt.instruction
+    assert "{{" not in explainer.spec.prompt.instruction
 
 
 def test_environment_overlay_wins_over_the_manifest(root):
     production = ConfigStore(root, environment="production")
-    health = production.load_agent("health-advisor")
-    assert health.spec.policies.max_tool_calls == 6
-    assert health.spec.guardrails.profile == "strict"
+    release = production.load_agent("release-manager")
+    assert release.spec.policies.max_tool_calls == 6
+    assert release.spec.guardrails.profile == "strict"
     # the fleet-wide deny list of the production overlay reaches every agent
-    assert "debug.*" in health.spec.permissions.tools.deny
+    assert "debug.*" in release.spec.permissions.tools.deny
 
     local = ConfigStore(root, environment="local")
-    assert local.load_agent("health-advisor").spec.guardrails.profile == "standard"
+    assert local.load_agent("release-manager").spec.guardrails.profile == "standard"
 
 
 def test_unknown_names_and_environments_report_what_exists(store: ConfigStore, root):
     with pytest.raises(ConfigError, match="unknown agent"):
         store.load_agent("does-not-exist")
     with pytest.raises(ConfigError, match="unknown environment"):
-        ConfigStore(root, environment="nope").defaults and ConfigStore(root, environment="nope").load_agent("greeting")
+        ConfigStore(root, environment="nope").defaults and ConfigStore(root, environment="nope").load_agent("tech-explainer")
 
 
 def test_every_manifest_in_the_repository_validates(store: ConfigStore):
@@ -84,14 +84,14 @@ def test_environment_defaults_do_not_override_an_explicit_agent_choice(root):
 
     staging = ConfigStore(root, environment="staging")
     # staging defaults every agent to the 'standard' policy profile...
-    assert staging.load_agent("greeting").spec.policies.profile == "standard"
+    assert staging.load_agent("tech-explainer").spec.policies.profile == "standard"
     # ...but the agent's own model choice survives the environment default
-    assert staging.load_agent("greeting").spec.model.profile == "creative"
+    assert staging.load_agent("tech-explainer").spec.model.profile == "balanced"
 
     production = ConfigStore(root, environment="production")
     # a targeted override is the way an environment forces a change
-    assert production.load_agent("greeting").spec.policies.profile == "frugal"
+    assert production.load_agent("tech-explainer").spec.policies.profile == "frugal"
     assert production.load_agent("software-manager").spec.policies.profile == "standard"
     # and a single key can be overridden without replacing the whole profile
-    health = production.load_agent("health-advisor")
-    assert (health.spec.policies.profile, health.spec.policies.max_tool_calls) == ("frugal", 6)
+    release = production.load_agent("release-manager")
+    assert (release.spec.policies.profile, release.spec.policies.max_tool_calls) == ("frugal", 6)

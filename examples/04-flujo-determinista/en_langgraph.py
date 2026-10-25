@@ -37,7 +37,7 @@ def _responder(agente, peticion: str) -> str:
 def construir():
     """Nodos y aristas: es el escalón donde el manifiesto y el framework coinciden.
 
-    Compara este grafo con `workflows/research-and-write.yaml`. Son la misma cosa
+    Compara este grafo con `catalog/workflows/tech-article.yaml`. Son la misma cosa
     escrita en dos sitios — por eso el runtime de LangGraph de esta plataforma
     es una traducción tan directa.
     """
@@ -45,8 +45,9 @@ def construir():
         model=modelo(),
         tools=[],
         prompt=(
-            "You are an academic researcher. Produce structured research notes: "
-            "key facts, background, state of the art and open questions."
+            "Eres analista de tecnología. Prepara notas estructuradas: qué es, "
+            "estado actual, alternativas, riesgos y preguntas abiertas. Marca "
+            "como *a verificar* lo que no puedas asegurar."
         ),
         name="research",
     )
@@ -54,8 +55,8 @@ def construir():
         model=modelo(),
         tools=[],
         prompt=(
-            "You are a science communicator. Turn the research notes into a "
-            "Markdown article. Keep every factual claim intact."
+            "Eres redactor del blog de ingeniería. Convierte las notas en un "
+            "artículo en Markdown. Conserva cada afirmación de las notas."
         ),
         name="write",
     )
@@ -68,13 +69,13 @@ def construir():
     grafo.add_edge("research", "write")
     grafo.add_edge("write", END)
 
-    return grafo.compile(name="research_and_write")
+    return grafo.compile(name="tech_article")
 
 
 def main() -> None:
     flujo = construir()
     print(flujo.get_graph().draw_ascii())
-    print(flujo.invoke({"tema": "arquitectura hexagonal"})["articulo"])
+    print(flujo.invoke({"tema": "WebAssembly en el servidor"})["articulo"])
 
 
 if __name__ == "__main__":

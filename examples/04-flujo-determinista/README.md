@@ -5,8 +5,8 @@ El orden lo decides tú. El modelo sólo rellena los huecos.
 ## La idea
 
 En el escalón 3 el modelo decidía a quién llamar y cuándo parar. Aquí no decide
-nada de eso: el camino está escrito. Investigar y luego escribir, siempre, en ese
-orden, una vez cada uno.
+nada de eso: el camino está escrito. Investigar una tecnología y luego escribir
+el artículo del blog, siempre, en ese orden, una vez cada uno.
 
 Suena a menos y es a más. Un flujo determinista se puede **reproducir**, se puede
 **presupuestar** —sabes cuántas llamadas al modelo va a hacer antes de
@@ -18,27 +18,30 @@ escalón 3 y su sitio era este.
 
 ## En la plataforma
 
-[`workflows/research-and-write.yaml`](../../workflows/research-and-write.yaml):
+[`tech-article`](../../catalog/workflows/tech-article.yaml): de un tema a un artículo para el blog de ingeniería.
 
 ```yaml
 spec:
   type: sequential
   nodes:
     - name: research
-      agent: researcher
+      agent: tech-researcher
     - name: write
-      agent: writer
+      agent: tech-writer
 ```
 
 Cuatro formas: `sequential` en línea, `parallel` en abanico, `loop` repitiendo
 con tope, y `graph` con las aristas escritas a mano.
 
-Y los mismos agentes sirven sueltos y como pasos. `researcher` no sabe que forma
-parte de un flujo, que es justo lo que permite reusarlo en otro.
+Y los mismos agentes sirven sueltos y como pasos. `tech-researcher` no sabe que forma
+parte de un flujo, que es justo lo que permite reusarlo en otro: el mismo
+`tech-researcher` es una de las dos ramas de
+[`tech-briefing`](../../catalog/workflows/tech-briefing.yaml), en paralelo con
+`tech-explainer`.
 
 ```bash
-agentctl run research-and-write -m "arquitectura hexagonal"
-agentctl --runtime langgraph run research-and-write -m "arquitectura hexagonal"
+agentctl run tech-article -m "WebAssembly en el servidor"
+agentctl --runtime langgraph run tech-article -m "WebAssembly en el servidor"
 ```
 
 ### La forma publicada
@@ -46,17 +49,17 @@ agentctl --runtime langgraph run research-and-write -m "arquitectura hexagonal"
 Al publicar, lo implícito se escribe:
 
 ```bash
-agentctl export research-and-write -o dist/contracts
+agentctl export tech-article -o dist/contracts
 ```
 
 ```yaml
 nodes:
   - name: research
-    agent: researcher@0.1.0          # versión fijada
+    agent: tech-researcher@0.1.0     # versión fijada
     needs: []
     with: {message: "{{ inputs.message }}"}
   - name: write
-    agent: writer@0.1.0
+    agent: tech-writer@0.1.0
     needs: [research]                # el orden, ya explícito
     with: {input: "{{ steps.research.output }}"}
 ```

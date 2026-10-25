@@ -8,6 +8,6 @@
 tests
 docs
 examples
-evals
+catalog/agents/**/evals
 deploy
 mlruns

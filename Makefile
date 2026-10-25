@@ -183,11 +183,11 @@ mcp-inspector:
 casos:
 	@echo ""
 	@echo "Casos de uso — cada uno añade una forma de colaborar al anterior"
-	@echo "  make caso-1   greeting             un agente solo"
-	@echo "  make caso-2   health-advisor       un agente que llama a tools"
+	@echo "  make caso-1   tech-explainer       un agente solo: explica un concepto técnico"
+	@echo "  make caso-2   release-manager      un agente con tools: de los commits a la versión y sus notas"
 	@echo "  make caso-3   software-manager     delega en un desarrollador y un revisor (lo decide el modelo)"
-	@echo "  make caso-4   research-and-write   flujo secuencial (lo decide el YAML)"
-	@echo "  make caso-5   parallel-briefing    dos agentes en paralelo"
+	@echo "  make caso-4   tech-article         flujo secuencial: investigar y redactar (lo decide el YAML)"
+	@echo "  make caso-5   tech-briefing        en paralelo: una tecnología, dos audiencias"
 	@echo "  make caso-6   review-loop          bucle desarrollador <-> revisor"
 	@echo "  make caso-7   software-manager     el caso 3 por A2A: cada sub-agente en su proceso y framework"
 	@echo "  make caso-8   data-consumer        dos organizaciones hablando por A2A (dataspace)"
@@ -196,29 +196,29 @@ casos:
 	@echo "  Opciones: MSG=\"...\" (tu mensaje)  RUNTIME=adk|langgraph|langchain (otro framework)"
 	@echo ""
 
-caso-1: CASO_AGENT := greeting
+caso-1: CASO_AGENT := tech-explainer
 caso-1: CASO_TITLE := Un agente solo: un modelo con instrucciones
-caso-1: CASO_MSG   := Hola, ¿qué sabes hacer?
-caso-1: CASO_UI    := make dev-adk AGENT=greeting
+caso-1: CASO_MSG   := ¿Qué es una API REST?
+caso-1: CASO_UI    := make dev-adk AGENT=tech-explainer
 
-caso-2: CASO_AGENT := health-advisor
-caso-2: CASO_TITLE := Un agente que llama a tools (código Python)
-caso-2: CASO_MSG   := Mido 1,80 m y peso 85 kg, ¿cómo voy?
-caso-2: CASO_UI    := make dev-adk AGENT=health-advisor  (pestaña Events: cada llamada a una tool)
+caso-2: CASO_AGENT := release-manager
+caso-2: CASO_TITLE := Un agente que llama a tools (código Python): la versión la calcula una función, no el modelo
+caso-2: CASO_MSG   := Versión actual: 1.4.2. Commits: feat(api): paginación en /orders · fix: cierre de conexiones al reiniciar · refactor!: elimina /v1/orders
+caso-2: CASO_UI    := make dev-adk AGENT=release-manager  (pestaña Events: cada llamada a una tool)
 
 caso-3: CASO_AGENT := software-manager
 caso-3: CASO_TITLE := Delegación decidida por el modelo: jefe, desarrollador y revisor
 caso-3: CASO_MSG   := Una función que valide un IBAN español
 caso-3: CASO_UI    := make dev-adk AGENT=software-manager  (Events: python_developer y code_reviewer)
 
-caso-4: CASO_AGENT := research-and-write
+caso-4: CASO_AGENT := tech-article
 caso-4: CASO_TITLE := Flujo secuencial: el orden lo fija el YAML, no el modelo
 caso-4: CASO_MSG   := Qué es el protocolo A2A, explicado para desarrolladores junior
 caso-4: CASO_UI    := make dev-langgraph  (el grafo del flujo en LangGraph Studio)
 
-caso-5: CASO_AGENT := parallel-briefing
-caso-5: CASO_TITLE := En paralelo: dos agentes sobre el mismo tema
-caso-5: CASO_MSG   := Kubernetes operators
+caso-5: CASO_AGENT := tech-briefing
+caso-5: CASO_TITLE := En paralelo: una tecnología, notas para el equipo y tres frases para dirección
+caso-5: CASO_MSG   := Adoptar Kubernetes operators para nuestras bases de datos
 caso-5: CASO_UI    := make dev-langgraph  (las dos ramas en LangGraph Studio)
 
 caso-6: CASO_AGENT := review-loop

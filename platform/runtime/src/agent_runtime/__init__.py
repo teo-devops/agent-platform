@@ -10,7 +10,7 @@ Typical use::
     from agent_runtime import AgentFactory, load_platform
 
     factory = load_platform(environment="local")
-    app = factory.build_app("health-advisor")
+    app = factory.build_app("release-manager")
 """
 
 from agent_core.result import BuildResult

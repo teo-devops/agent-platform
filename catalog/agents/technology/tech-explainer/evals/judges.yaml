@@ -1,14 +1,14 @@
 # Criterios que necesitan criterio. Lo que se pueda comprobar con un `contains`
 # va en `expect`, no aquí: una aserción no tiene falsos negativos y un juez sí.
 criteria:
-  saluda:
+  sin-jerga:
     question: >-
-      ¿La respuesta saluda o reconoce al usuario de forma cálida antes de
-      contestar, en vez de ir directa al grano?
+      ¿Entendería la respuesta alguien sin formación técnica? Cualquier término
+      técnico que aparezca, ¿está explicado en la misma frase?
 
   breve:
     question: >-
-      ¿La respuesta tiene tres frases o menos, sin contar el saludo?
+      ¿La respuesta tiene tres frases o menos?
 
   admite-que-no-sabe:
     question: >-

@@ -11,6 +11,7 @@ Layout expected under the repository root::
     configs/permissions.yaml        named permission profiles
     configs/sandboxes.yaml          named sandbox profiles
     configs/environments/<env>.yaml per-environment overrides
+    agents/<name>/evals/            the agent's eval suite (dataset + judges)
 
 Resolution order for an agent (later layers win)::
 
@@ -46,6 +47,8 @@ if TYPE_CHECKING:  # pragma: no cover
 from .merge import interpolate, merge_all, render_template
 
 DEFAULT_ENVIRONMENT = "local"
+#: Folder, inside an agent's own, that holds its eval suite.
+EVALS_SUBDIR = "evals"
 
 _PROFILE_SECTIONS = {
     "model": "models",
@@ -144,7 +147,7 @@ class ConfigStore:
     def agent_paths(self) -> dict[str, Path]:
         """Every agent in the catalogue, indexed by name.
 
-        Agents are grouped in domain folders (``catalog/agents/health/...``) so
+        Agents are grouped in domain folders (``catalog/agents/engineering/...``) so
         that a catalogue of fifty does not become one flat listing. The domain is
         filing, not identity: an agent is referenced by its name and moving it
         between folders changes nothing.
@@ -166,6 +169,19 @@ class ConfigStore:
 
     def list_agents(self) -> list[str]:
         return sorted(self.agent_paths)
+
+    def eval_suites(self) -> dict[str, Path]:
+        """Every eval suite, indexed by the agent it measures.
+
+        A suite lives inside its agent's folder (``<agente>/evals/``), so an
+        agent and what proves it works are one directory: there is no second
+        tree with the same names to keep in step.
+        """
+        return {
+            name: path.parent / EVALS_SUBDIR
+            for name, path in self.agent_paths.items()
+            if (path.parent / EVALS_SUBDIR / "dataset.yaml").exists()
+        }
 
     def list_workflows(self) -> list[str]:
         workflows_dir = self.root / WORKFLOWS_DIR

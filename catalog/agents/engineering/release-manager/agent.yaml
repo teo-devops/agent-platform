@@ -1,0 +1,23 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: release-manager
+  version: 0.1.0
+  description: A partir de los commits desde la última versión, decide la siguiente (semver) y redacta las notas de release.
+  owner: dev-tools-team
+  tags: [demo, tools, engineering]
+spec:
+  model:
+    profile: precise
+  prompt:
+    file: prompt.md
+  # Decidir la versión es aritmética, no criterio: lo hacen las tools.
+  tools:
+    - ref: release.parse_commits
+    - ref: release.next_version
+    - ref: time.now
+  permissions:
+    tools:
+      allow: ["release.*", "time.*"]
+  policies:
+    max_tool_calls: 6

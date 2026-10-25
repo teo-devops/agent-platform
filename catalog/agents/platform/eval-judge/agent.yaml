@@ -3,9 +3,9 @@ kind: Agent
 metadata:
   name: eval-judge
   version: 0.1.0
-  description: Decides whether one answer meets one criterion, and says why.
+  description: Juez de las evals — decide si una respuesta cumple un criterio y dice por qué. Interno de la plataforma.
   owner: platform-team
-  tags: [quality, internal]
+  tags: [platform, internal]
 spec:
   model:
     # Frío a propósito: un juez que fluctúa no sirve para comparar dos

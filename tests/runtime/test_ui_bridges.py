@@ -25,7 +25,7 @@ def _import(path, name):
 def test_adk_bridge_is_one_app_per_manifest_with_the_plugins(root, monkeypatch):
     """`adk web` lista todo el catálogo, y cada app lleva el enforcement."""
     monkeypatch.setenv("GOOGLE_API_KEY", "test")
-    names = ["python-developer", "parallel-briefing"]
+    names = ["python-developer", "tech-briefing"]
     target = root / ui.GENERATED_DIR / "adk_apps_test"
     try:
         for name in names:
@@ -39,8 +39,8 @@ def test_adk_bridge_is_one_app_per_manifest_with_the_plugins(root, monkeypatch):
         plugins = {type(p).__name__ for p in module.app.plugins}
         assert {"GuardrailPlugin", "ToolPermissionPlugin", "PolicyPlugin"} <= plugins
 
-        workflow = _import(target / "parallel_briefing" / "agent.py", "adk_bridge_workflow")
-        assert workflow.app.name == "parallel_briefing"
+        workflow = _import(target / "tech_briefing" / "agent.py", "adk_bridge_workflow")
+        assert workflow.app.name == "tech_briefing"
     finally:
         import shutil
 

@@ -1,0 +1,18 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: tech-explainer
+  version: 0.1.0
+  description: Explica un concepto técnico en lenguaje claro, en tres frases, para quien no es especialista.
+  owner: platform-team
+  tags: [demo, starter, technology]
+spec:
+  model:
+    profile: balanced
+  prompt:
+    file: prompt.md
+    # Cambia la audiencia sin tocar el prompt: es una variable.
+    variables:
+      audiencia: "una persona de negocio sin formación técnica"
+  permissions:
+    profile: no-tools

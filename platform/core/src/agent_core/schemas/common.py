@@ -38,7 +38,7 @@ class Metadata(Spec):
 
     @property
     def python_name(self) -> str:
-        """The name in the identifier form runtimes require (``health_advisor``)."""
+        """The name in the identifier form runtimes require (``release_manager``)."""
         return self.name.replace("-", "_")
 
 
@@ -84,7 +84,7 @@ class PromptSpec(Spec):
 class ToolRef(Spec):
     """A reference to a registered tool, optionally disabled per environment."""
 
-    ref: str = Field(description="Referencia registrada, p. ej. `health.calculate_bmi`. Mírales el nombre con `agentctl components`.")
+    ref: str = Field(description="Referencia registrada, p. ej. `release.next_version`. Mírales el nombre con `agentctl components`.")
     alias: str | None = Field(default=None, description="Otro nombre con el que el modelo verá la herramienta.")
     enabled: bool = Field(default=True, description="Ponlo a false en un overlay de entorno para quitarla sin tocar el manifiesto.")
     params: dict[str, Any] = Field(default_factory=dict, description="Parámetros fijos para la herramienta.")
@@ -160,7 +160,7 @@ class PolicySpec(Spec):
 class AllowDeny(Spec):
     """Glob allow/deny lists. ``deny`` always wins over ``allow``."""
 
-    allow: list[str] = Field(default_factory=lambda: ["*"], description="Patrones permitidos, p. ej. `[\"health.*\"]`.")
+    allow: list[str] = Field(default_factory=lambda: ["*"], description="Patrones permitidos, p. ej. `[\"code.*\"]`.")
     deny: list[str] = Field(default_factory=list, description="Patrones prohibidos. `deny` gana siempre sobre `allow`.")
 
     def permits(self, ref: str) -> bool:

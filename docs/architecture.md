@@ -186,9 +186,8 @@ ciclo si se importaran. No lo hacen.
 
 ```text
 platform/     lo que se publica            cambia poco, lo toca el equipo de plataforma
-catalog/      lo que se ejecuta            cambia a diario, lo toca cada equipo dueño
+catalog/      lo que se ejecuta, y sus evals   cambia a diario, lo toca cada equipo dueño
 configs/      perfiles y entornos          cambia cuando cambia la flota
-evals/        lo que mide si va bien       crece con cada fallo de producción
 deploy/       lo que lo opera              kind, observabilidad, kagent, imágenes
 ```
 

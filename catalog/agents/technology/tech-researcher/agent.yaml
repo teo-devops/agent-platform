@@ -1,0 +1,16 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: tech-researcher
+  version: 0.1.0
+  description: Prepara notas técnicas sobre una tecnología — qué es, alternativas, riesgos y preguntas abiertas — para quien tiene que decidir o escribir.
+  owner: platform-team
+  tags: [demo, workflow-step, technology]
+spec:
+  model:
+    profile: precise
+  prompt:
+    file: prompt.md
+  permissions:
+    profile: no-tools
+  output_key: research_notes

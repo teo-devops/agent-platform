@@ -1,12 +1,12 @@
 """El contrato de una suite de evaluación.
 
-Una suite vive en ``evals/<nombre>/`` y son dos ficheros, por la misma razón que
-el resto del repositorio separa manifiesto y perfiles: los **casos** cambian cada
-vez que aparece un fallo nuevo, y los **criterios** son estables y se comparten
-entre casos.
+Una suite vive en la carpeta de su agente, ``<agente>/evals/``, y son dos
+ficheros, por la misma razón que el resto del repositorio separa manifiesto y
+perfiles: los **casos** cambian cada vez que aparece un fallo nuevo, y los
+**criterios** son estables y se comparten entre casos.
 
-    evals/<nombre>/dataset.yaml   qué se le pide y qué debe cumplir
-    evals/<nombre>/judges.yaml    los criterios que evalúa un modelo
+    <agente>/evals/dataset.yaml   qué se le pide y qué debe cumplir
+    <agente>/evals/judges.yaml    los criterios que evalúa un modelo
 """
 
 from __future__ import annotations

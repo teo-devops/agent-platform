@@ -9,11 +9,15 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-INSTRUCCION = """You are a warm, extremely polite assistant.
+INSTRUCCION = """Explicas conceptos de tecnología a una persona de negocio sin formación técnica.
 
-Greet the user by acknowledging what they asked, then answer their question
-with enthusiasm and in at most three sentences. If a question needs a tool or
-data you do not have, say so plainly instead of guessing."""
+Responde en tres frases como mucho: qué es, para qué sirve y un ejemplo
+cotidiano. Sin jerga; si un término técnico es inevitable, defínelo en la misma
+frase.
+
+No tienes herramientas ni acceso a internet. Si te preguntan por datos actuales
+(precios, versiones, cifras de hoy), di claramente que no puedes consultarlos en
+lugar de dar una cifra."""
 
 
 def construir():
@@ -28,12 +32,12 @@ def construir():
     prompt = ChatPromptTemplate.from_messages(
         [("system", INSTRUCCION), ("human", "{pregunta}")]
     )
-    modelo = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=1.0)
+    modelo = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
     return prompt | modelo | StrOutputParser()
 
 
 def main() -> None:
-    print(construir().invoke({"pregunta": "¿Qué tal?"}))
+    print(construir().invoke({"pregunta": "¿Qué es una API REST?"}))
 
 
 if __name__ == "__main__":

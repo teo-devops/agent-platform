@@ -19,10 +19,14 @@ La regla que sostiene todo: **cambiar un agente nunca debería requerir un relea
 de la plataforma**. Si para cambiar un prompt, un modelo o un permiso hay que
 tocar Python, el diseño ha fallado.
 
-El caso de uso de la demo es **ingeniería de software**: un jefe de desarrollo
-(`software-manager`) recibe un requisito, lo delega por A2A en un desarrollador
-(`python-developer`) y pasa el resultado a un revisor (`code-reviewer`) que
-fundamenta sus hallazgos con análisis estático servido por MCP.
+Todo el catálogo cuenta **una sola historia: la de una organización que hace
+producto tecnológico**. Su equipo de ingeniería escribe, revisa, ejecuta y
+versiona código; su equipo de tecnología evalúa y explica tecnologías; su equipo
+de medios lo publica en el blog; y colabora con otras organizaciones por A2A. La
+demo principal es la de ingeniería: un jefe de desarrollo (`software-manager`)
+recibe un requisito, lo delega en un desarrollador (`python-developer`) y pasa el
+resultado a un revisor (`code-reviewer`) que fundamenta sus hallazgos con
+análisis estático servido por MCP.
 
 > ¿Primera vez? Mira los diagramas de [Arquitectura](#arquitectura) y sigue por
 > [Explora los casos de uso](#explora-los-casos-de-uso), que no necesita clúster. Para entender el porqué: [`docs/concepts.md`](docs/concepts.md)
@@ -342,6 +346,38 @@ propósito. Todo lo que habla con Kubernetes va contra el contexto
 
 ---
 
+## El catálogo
+
+Cada agente es una carpeta: su manifiesto, su prompt y, si se mide, su suite de
+evals. **Una ruta por agente**; no hay un segundo árbol con los mismos nombres.
+
+```text
+catalog/agents/engineering/release-manager/
+├── agent.yaml      qué es: modelo, tools, permisos, límites
+├── prompt.md       qué instrucciones lleva
+└── evals/          cómo se sabe que funciona (agentctl eval release-manager)
+    ├── dataset.yaml
+    └── judges.yaml
+```
+
+| Dominio | Agente | Para qué lo usarías | Tools | Caso | Evals |
+|---|---|---|---|---|---|
+| technology | `tech-explainer` | Explicar un concepto técnico a negocio en tres frases | — | 1, 5 | ✅ |
+| technology | `tech-researcher` | Preparar notas para decidir sobre una tecnología: alternativas, riesgos, preguntas | — | 4, 5 | |
+| media | `tech-writer` | Convertir esas notas en un artículo del blog de ingeniería | `text.*` | 4 | |
+| engineering | `release-manager` | De los commits a la siguiente versión semver y sus notas de release | `release.*`, `time.now` | 2 | ✅ |
+| engineering | `software-manager` | Coordinar desarrollo y revisión de un requisito | delega | 3, 7, 9 | |
+| engineering | `python-developer` | Escribir una función tipada y documentada | `code.check_syntax` | 3, 6, 7 | ✅ |
+| engineering | `code-reviewer` | Revisar código con análisis estático real | `code.*` | 3, 6, 7 | ✅ |
+| engineering | `python-executor` | Escribir código **y ejecutarlo** con sus tests en un sandbox | `sandbox.*` | 10 | |
+| dataspace | `data-provider` · `data-consumer` | Dos organizaciones: una ofrece datos, la otra comprueba si su política permite el uso | `dataspace.*` · delega | 8 | |
+| platform | `eval-judge` | Interno: el juez de las evals. No es una demo | — | — | |
+
+Y tres workflows que componen esos mismos agentes: `tech-article` (investigar →
+redactar), `tech-briefing` (una tecnología, dos audiencias en paralelo) y
+`review-loop` (desarrollador ↔ revisor). Un agente no sabe si corre suelto o
+como paso de un flujo.
+
 ## Explora los casos de uso
 
 ```bash
@@ -357,11 +393,11 @@ tools llama cada uno y qué viaja por A2A.
 
 | # | Pruébalo | Qué colaboración ves | Míralo también en una UI |
 |---|---|---|---|
-| 1 | `make caso-1` | `greeting`: ninguna, un modelo con instrucciones | `make dev-adk AGENT=greeting` |
-| 2 | `make caso-2` | `health-advisor`: un agente que llama a **tools** (código Python) | `make dev-adk AGENT=health-advisor` (pestaña *Events*) |
+| 1 | `make caso-1` | `tech-explainer`: ninguna, un modelo con instrucciones | `make dev-adk AGENT=tech-explainer` |
+| 2 | `make caso-2` | `release-manager`: un agente que llama a **tools** (código Python): la versión la calcula una función, no el modelo | `make dev-adk AGENT=release-manager` (pestaña *Events*) |
 | 3 | `make caso-3` | `software-manager`: **delegación decidida por el modelo**. El jefe llama a `python-developer` y a `code-reviewer`, y si la revisión encuentra un fallo, vuelve al desarrollador | `make dev-adk AGENT=software-manager` |
-| 4 | `make caso-4` | `research-and-write`: **flujo secuencial**. El orden lo fija el YAML, no el modelo | `make dev-langgraph` (el grafo) |
-| 5 | `make caso-5` | `parallel-briefing`: **en paralelo**, dos agentes sobre el mismo tema | `make dev-langgraph` |
+| 4 | `make caso-4` | `tech-article`: **flujo secuencial**, investigar y redactar. El orden lo fija el YAML, no el modelo | `make dev-langgraph` (el grafo) |
+| 5 | `make caso-5` | `tech-briefing`: **en paralelo**, una tecnología para dos audiencias (equipo y dirección) | `make dev-langgraph` |
 | 6 | `make caso-6` | `review-loop`: **bucle** desarrollador ↔ revisor, dos vueltas | `make dev-langgraph` |
 | 7 | `make caso-7` | El 3 por **A2A**: cada sub-agente en **su proceso y su framework** | La terminal de `make a2a-up` |
 | 8 | `make caso-8` | `data-consumer` → `data-provider`: **dos organizaciones** por A2A. B pregunta a A qué datos tiene y decide si su política permite el uso | La terminal de `make a2a-up` |
@@ -521,12 +557,12 @@ agent-platform/
 │   └── sandboxes/local/       agent-sandbox-local: spec.sandbox -> contenedor Docker bloqueado
 │
 ├── catalog/                   LO QUE SE EJECUTA — lo toca cada equipo
-│   ├── agents/<dominio>/<nombre>/   starter · health · content · engineering · quality
+│   ├── agents/<dominio>/<nombre>/   technology · media · engineering · dataspace · platform
+│   │                                agent.yaml + prompt.md + evals/ (si se mide)
 │   ├── workflows/*.yaml
 │   ├── skills/<nombre>/SKILL.md     instrucciones que el agente lee bajo demanda
 │   └── tools/*.py                   funciones sueltas: soltar un .py y ya
 ├── configs/                   perfiles (modelos, guardrails, permisos, políticas, sandboxes) y entornos
-├── evals/<objetivo>/          datasets y criterios: medir, no suponer
 │
 ├── deploy/                    LO QUE LO OPERA
 │   ├── kind/                  el clúster del laboratorio
@@ -636,5 +672,5 @@ Cómo se combinan las capas (flota, entorno, agente, override): [`docs/configura
 - [`docs/demo.md`](docs/demo.md) — el guion de la demo (25′ y 15′), con plan B.
 - [`docs/architecture.md`](docs/architecture.md) — paquetes, entry points, paridad entre frameworks, límites conocidos.
 - [`docs/configuration.md`](docs/configuration.md) — referencia campo a campo, generada de los modelos (`make docs`).
-- [`catalog/skills/README.md`](catalog/skills/README.md) · [`catalog/tools/README.md`](catalog/tools/README.md) · [`evals/README.md`](evals/README.md)
+- [`catalog/skills/README.md`](catalog/skills/README.md) · [`catalog/tools/README.md`](catalog/tools/README.md) · [`docs/evals.md`](docs/evals.md)
 - [`examples/`](examples/) — la escalera en código nativo de cada framework.

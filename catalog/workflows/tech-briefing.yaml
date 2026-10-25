@@ -1,0 +1,17 @@
+apiVersion: agents.platform/v1
+kind: Workflow
+metadata:
+  name: tech-briefing
+  version: 0.1.0
+  description: Una tecnología, dos audiencias a la vez — notas para el equipo técnico y una explicación para dirección.
+  owner: platform-team
+  tags: [demo, parallel, technology]
+spec:
+  type: parallel
+  nodes:
+    - name: technical
+      agent: tech-researcher
+      description: Notas para quien tiene que evaluarla.
+    - name: executive
+      agent: tech-explainer
+      description: Tres frases para quien tiene que aprobarla.

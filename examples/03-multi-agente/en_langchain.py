@@ -36,13 +36,13 @@ def construir():
     """
     desarrollador = especialista(
         "python_developer",
-        "You are a senior Python developer. Given a requirement, write one clean, "
-        "PEP8-compliant function with type hints and a docstring.",
+        "Eres desarrollador Python senior. Dado un requisito, escribe una única "
+        "función limpia, conforme a PEP 8, con type hints y docstring.",
     )
     revisor = especialista(
         "code_reviewer",
-        "You are a code reviewer. Report correctness bugs and edge cases first, "
-        "then real performance or security concerns.",
+        "Eres revisor de código. Informa primero de bugs y casos límite, "
+        "después de problemas reales de rendimiento o seguridad.",
     )
 
     return create_agent(
@@ -51,18 +51,18 @@ def construir():
             como_herramienta(
                 desarrollador,
                 "python_developer",
-                "Writes a Python function that satisfies a requirement.",
+                "Escribe una función Python que cumple un requisito.",
             ),
             como_herramienta(
                 revisor,
                 "code_reviewer",
-                "Reviews Python code and reports bugs, risks and improvements.",
+                "Revisa código Python y devuelve bugs, riesgos y mejoras.",
             ),
         ],
         system_prompt=(
-            "You are a software development manager. You never write or review code "
-            "yourself. Delegate the implementation to python_developer, then send the "
-            "result to code_reviewer, and summarise both."
+            "Eres jefe de desarrollo. Nunca escribes ni revisas código tú. Delega "
+            "la implementación en python_developer, pasa el resultado a "
+            "code_reviewer y resume ambos."
         ),
         name="software_manager",
     )
