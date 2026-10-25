@@ -28,7 +28,8 @@ jobs:
       - name: Install
         run: make install
       - name: Lint
-        run: .venv/bin/pip install -q ruff && .venv/bin/ruff check .
+        # Versión fijada: cada serie nueva de ruff añade reglas y rompería el CI sin cambiar el código.
+        run: .venv/bin/pip install -q ruff==0.15.12 && .venv/bin/ruff check .
       - name: Tests (incluida la prueba del sandbox con Docker real)
         run: make test
         env:
