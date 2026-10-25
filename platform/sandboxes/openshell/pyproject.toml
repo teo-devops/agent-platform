@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-sandbox-openshell"
+version = "0.1.0"
+description = "Sandbox backend 'openshell': the code an agent runs, in an NVIDIA OpenShell sandbox with an out-of-process policy."
+requires-python = ">=3.10"
+# Only the `openshell` CLI (v0.1.x) on PATH, talking to a running gateway. Not
+# the Python SDK: its docs cover neither attaching a policy nor the exit code.
+dependencies = [
+    "agent-core==0.1.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.entry-points."agent_platform.sandboxes"]
+"openshell" = "agent_sandbox_openshell:OpenShellSandbox"
+
+# `agentctl openshell policy <agente>`: the policy an agent would get, to review it.
+[project.entry-points."agent_platform.commands"]
+"openshell" = "agent_sandbox_openshell.cli:register"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_sandbox_openshell"]

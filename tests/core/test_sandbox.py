@@ -84,7 +84,7 @@ def test_run_python_writes_the_snippet_and_runs_it():
     result = tools["sandbox.run_python"]("print(1)")
     assert result["exit_code"] == 0
     assert backend.session.files == {"/workspace/_snippet.py": "print(1)"}
-    assert backend.session.commands == ["python /workspace/_snippet.py"]
+    assert backend.session.commands == ["python3 /workspace/_snippet.py"]
 
 
 def test_without_exec_only_the_file_tools_exist():
@@ -120,8 +120,8 @@ def test_listing_sandbox_tools_by_hand_is_explained():
 
 
 def test_an_uninstalled_backend_is_a_build_error(registries):
-    with pytest.raises(BuildError, match="'openshell', which is not installed"):
-        resolve_backend(SandboxSpec(backend="openshell"), registries.sandboxes, agent="a")
+    with pytest.raises(BuildError, match="'nope', which is not installed"):
+        resolve_backend(SandboxSpec(backend="nope"), registries.sandboxes, agent="a")
 
 
 def test_profiles_resolve_from_configs(store):
@@ -141,3 +141,23 @@ def test_an_agent_with_sandbox_gets_its_own_tools(factory):
     assert set(first) == {"sandbox.exec", "sandbox.run_python", "sandbox.write_file", "sandbox.read_file"}
     assert first["sandbox.exec"] is not second["sandbox.exec"]
 
+
+
+def test_the_environment_chooses_who_isolates(root):
+    """El perfil dice qué se aísla; el entorno, con quién. El manifiesto no cambia."""
+    from agent_core.config import ConfigStore
+
+    assert ConfigStore(root, environment="local").load("python-executor").spec.sandbox.backend == "local"
+    assert ConfigStore(root, environment="sandbox-sbx").load("python-executor").spec.sandbox.backend == "sbx"
+    openshell = ConfigStore(root, environment="sandbox-openshell").load("python-executor").spec.sandbox
+    assert openshell.backend == "openshell"
+    assert openshell.network.egress.default == "deny", "el qué no cambia con el quién"
+
+
+def test_the_variable_wins_and_never_gives_a_sandbox_to_who_has_none(root, monkeypatch):
+    from agent_core.config import ConfigStore
+
+    monkeypatch.setenv("AGENT_SANDBOX_BACKEND", "openshell")
+    store = ConfigStore(root, environment="sandbox-sbx")
+    assert store.load("python-executor").spec.sandbox.backend == "openshell"
+    assert not store.load("python-developer").spec.sandbox.enabled

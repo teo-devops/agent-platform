@@ -37,9 +37,12 @@ platform/
 ├── a2a/                  agent-a2a               un agente servido por A2A; delegar en uno remoto
 ├── kagent/               agent-kagent            manifiesto -> CRDs de kagent; host BYO
 ├── integrations/
-│   └── mlflow/           agent-mlflow            prompts, versiones de agente, evals y métricas
+│   ├── mlflow/           agent-mlflow            prompts, versiones de agente, evals y métricas
+│   └── langflow/         agent-langflow          flujos de Langflow generados del catálogo, por A2A
 └── sandboxes/
-    └── local/            agent-sandbox-local     spec.sandbox -> contenedor Docker bloqueado
+    ├── local/            agent-sandbox-local     spec.sandbox -> contenedor Docker bloqueado
+    ├── sbx/              agent-sandbox-sbx       spec.sandbox -> microVM de Docker Sandboxes
+    └── openshell/        agent-sandbox-openshell spec.sandbox -> política de NVIDIA OpenShell
 ```
 
 ### `agent-core` — neutro de verdad
@@ -145,6 +148,16 @@ trazas. No es un framework. Este paquete hace de puente en los dos sentidos:
   está en la 2.x; como `create_agent` de LangChain 1.x devuelve un grafo de
   LangGraph, el mismo host sirve los dos.
 
+### `agent-langflow` — la consola
+
+Langflow como interfaz para manejar los agentes, **sin** ser su motor
+([ADR 0005](adr/0005-langflow-como-consola.md), evaluación en
+[`control-plane.md`](control-plane.md)). `agentctl langflow export <workflow>`
+genera un flujo con un nodo `A2A Agent` por paso (y `Combine Text` donde
+convergen ramas) y lo importa por la API REST. Las plantillas de componentes
+salen de la instancia en marcha, no de este repositorio. Langflow 1.12.8 corre
+en `deploy/langflow/compose.yaml`, sólo en loopback.
+
 ### `agent-mlflow` — el backend de AgentOps
 
 El **único** paquete que importa `mlflow` (lo comprueba `tests/test_boundaries.py`).
@@ -170,7 +183,7 @@ points, así que **instalar un paquete es lo que hace que su capacidad exista**:
 | `agent_platform.commands` | `mcp`, `a2a`, `kagent`, `integrations/mlflow` | `agentctl` (subcomandos) |
 | `agent_platform.transports` | `a2a` | la fábrica, al construir un sub-agente remoto |
 | `agent_platform.eval_sinks` | `integrations/mlflow` | `agentctl eval --sink` |
-| `agent_platform.sandboxes` | `sandboxes/local` | la fábrica, al construir un agente con `spec.sandbox` |
+| `agent_platform.sandboxes` | `sandboxes/{local,sbx,openshell}` | la fábrica, al construir un agente con `spec.sandbox` |
 
 ```text
 agent-core  <-  agent-runtime  <-  runtimes/*  ·  mcp  ·  kagent  ·  integrations/mlflow
@@ -265,8 +278,17 @@ riesgo. `spec.sandbox` es ese sitio, y separa dos preguntas
   `configs/sandboxes.yaml`: ficheros legibles y escribibles, salida de red
   (*deny* por defecto), procesos, si dentro se puede llamar a un modelo, CPU,
   memoria y tiempos.
-- **Cómo** — un backend instalado bajo `agent_platform.sandboxes`. Hoy `local`
-  (Docker); después `openshell` y `k8s` ([ADR 0003](adr/0003-openshell-como-backend.md)).
+- **Con quién** — un backend instalado bajo `agent_platform.sandboxes`, que
+  **elige el entorno** ([ADR 0006](adr/0006-sandbox-es-decision-de-entorno.md)):
+  `sandbox.backend` en `configs/environments/<env>.yaml` o `AGENT_SANDBOX_BACKEND`.
+  El mismo agente y el mismo perfil, tres proveedores:
+
+```bash
+agentctl                         run python-executor ...   # local: contenedor Docker
+agentctl --env sandbox-sbx       run python-executor ...   # Docker Sandboxes: microVM
+agentctl --env sandbox-openshell run python-executor ...   # NVIDIA OpenShell
+agentctl --env sandbox-openshell openshell policy python-executor   # la política, para auditarla
+```
 
 ```yaml
 spec:
@@ -290,19 +312,24 @@ a su propio sandbox, y cada builder sólo las envuelve. Tres decisiones:
 - **Un fallo es una respuesta**, `{"error": ...}`, no una excepción: el modelo
   lee qué pasó y corrige, igual en los tres frameworks.
 
-Cómo cumple el backend `local` cada parte, y qué no puede cumplir (lo avisa al abrir):
+Cómo cumple cada proveedor cada parte del spec. Lo que no puede cumplir lo
+avisa al abrir; lo que **rebajaría** el aislamiento declarado, lo rechaza:
 
-| Del spec | En Docker |
-|---|---|
-| `filesystem.write` | un `tmpfs` por ruta; el resto de la imagen, `--read-only` |
-| `network.egress` deny sin hosts | `--network none` |
-| `network.egress.allow: [hosts]` | ❌ Docker no filtra por host: red completa, con aviso. Para eso, `openshell` |
-| `process` | `--pids-limit`, `--cap-drop ALL`, `no-new-privileges`, uid `nobody` |
-| `inference.route: platform` | ❌ no hay pasarela local; aviso |
-| `resources` | `--cpus`, `--memory`, timeout por comando, `ttl` como vida del contenedor |
+| Del spec | `local` (contenedor) | `sbx` (microVM) | `openshell` |
+|---|---|---|---|
+| Frontera | kernel compartido con el host | **kernel propio** por sandbox | Landlock + seccomp, política **fuera** del proceso |
+| `filesystem.write` / `read` | `tmpfs` por ruta; imagen `--read-only` | rutas creadas en la VM; nada del host montado; reglas de ficheros de sbx fijas (aviso) | `filesystem_policy`, Landlock `hard_requirement` |
+| egress deny sin hosts | `--network none` | regla `deny **` por sandbox (proxy: un TCP se acepta pero no llegan datos) | sin reglas = todo denegado |
+| `egress.allow: [hosts]` | ❌ red completa, con aviso | ❌ **rechazado** si la política global permite `**` (es el valor por defecto): no se puede restringir por sandbox | ✅ una regla por host |
+| `egress.default: allow` | red completa (aviso) | lo que permita la política global (aviso) | ❌ rechazado |
+| `process` | `nobody`, `--cap-drop ALL`, `--pids-limit` | la VM es la frontera; dentro hay `sudo` (aviso) | UID 1000, nunca root |
+| `inference.route` | sólo `none` | sbx gestiona las claves en su proxy; la plataforma no enruta (aviso) | `platform` → `--provider`; `direct` rechazado |
+| `resources` | `--cpus`, `--memory` | `--cpus` (enteros), `-m` (mínimo 1 GiB) | sin campo (aviso) |
+| Comando atascado | timeout del CLI + `kill` | `timeout` dentro de la VM | `timeout` dentro del sandbox |
+| Verificado en esta máquina | ✅ | ✅ (sbx v0.42) | ⏳ con CLI simulado; la prueba real necesita el gateway instalado |
 
-Un contenedor comparte kernel con el host: `local` sirve para desarrollar, no
-es una frontera contra un atacante decidido.
+Los tres usan la imagen `agent-platform/sandbox:0.1.0` (`make sandbox-image`:
+UID 1000 y `/workspace`), salvo `sbx`, que usa su plantilla `shell`.
 
 ## Paridad entre runtimes
 
@@ -388,8 +415,11 @@ en otro runtime.
   reintentan 2 y 1 veces; `standard`, 1. En A2A, sólo si la petición no llegó (conexión
   rechazada, 502/503/504): `message/send` no es idempotente. Tras tres fallos
   seguidos a una URL, el delegado falla rápido 30 s (`AGENT_A2A_BREAKER_*`).
-- **Un agente con `spec.sandbox` no puede ir como declarativo en kagent**, y el
-  backend `local` necesita Docker: en un pod BYO hará falta el backend `k8s`.
+- **Un agente con `spec.sandbox` no puede ir como declarativo en kagent**, y
+  ninguno de los tres backends sirve dentro de un pod BYO: hará falta el backend `k8s`.
+- **`agentctl a2a serve` deduplica por `messageId`**: una petición repetida recibe
+  la respuesta ya calculada. Langflow manda un `messageId` nuevo en cada llamada,
+  así que una re-ejecución suya sí vuelve a ejecutar el agente.
 - **La sesión de sandbox vive lo que el agente construido**: en `a2a serve`
   la comparten las peticiones.
 - **kagent declarativo no aplica guardrails ni políticas.** `render` lo avisa.

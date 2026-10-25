@@ -1,6 +1,6 @@
 # 0003 · NVIDIA OpenShell entra como backend de sandbox
 
-**Estado:** aceptada (implementación pendiente)
+**Estado:** aceptada · backend implementado en `platform/sandboxes/openshell` (ver [0006](0006-sandbox-es-decision-de-entorno.md))
 
 ## Contexto
 
@@ -32,3 +32,22 @@ Las dos, en ese orden y sin mezclarlas:
   está en el esquema; el backend `local` avisa de que no lo cumple.
 - OpenShell está en alpha: el backend fija una versión y valida su esquema de
   política en tests antes de publicarse.
+
+## Implementación
+
+`render_policy(spec)` traduce `spec.sandbox` a la política (`version: 1`) y
+`agentctl openshell policy <agente>` la imprime para auditarla:
+
+| Del spec | En la política de OpenShell |
+|---|---|
+| `filesystem.write` / `read` | `filesystem_policy.read_write` / `read_only`, más la base de ejecución de la política por defecto (`/bin`, `/usr`, `/lib`, `/etc`, `/proc`); `/` nunca es escribible |
+| — | `landlock.compatibility: hard_requirement`: sin Landlock, el sandbox no arranca |
+| `process` | `run_as_user/group: "1000"` (OpenShell rechaza root) |
+| `network.egress.allow` | una regla por host (puerto 443 o el indicado), para los binarios de `/usr/bin` y `/usr/local/bin`; comodines de al menos 3 etiquetas |
+| `network.egress.default: allow` | **rechazado** |
+| `inference.route: platform` / `direct` | `--provider $AGENT_OPENSHELL_PROVIDER` / **rechazado** |
+| `resources.cpu/memory`, `process.max_procs` | sin campo en la política: se avisa |
+
+El backend usa el CLI (`sandbox create --policy --detach`, `sandbox exec -n
+--no-tty`, `sandbox delete`), no el SDK, cuya documentación no cubre ni la
+política ni el código de salida.

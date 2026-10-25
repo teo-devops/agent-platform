@@ -1,0 +1,54 @@
+# Langflow como consola de los agentes (docs/control-plane.md, ADR 0005).
+#
+# Langflow NO ejecuta nuestros agentes: los llama por A2A. Los agentes siguen
+# siendo manifiestos del catálogo, con sus guardrails, permisos y versiones.
+#
+#   make langflow-up      ->  http://127.0.0.1:7860   (usuario y clave en .agent-platform/langflow.env)
+#   make a2a-up           ->  los agentes, por A2A en 127.0.0.1:91xx
+#
+# Todo escucha sólo en loopback: Langflow ejecuta Python arbitrario
+# (componentes propios) y nuestros servidores A2A aún no autentican (Fase 1).
+
+name: agent-platform-langflow
+
+services:
+  langflow:
+    # Versión fijada: entre series hay cambios incompatibles.
+    image: langflowai/langflow:1.12.8
+    # Red del host para llegar a los agentes en 127.0.0.1 sin abrirlos a la red.
+    network_mode: host
+    env_file: ../../.agent-platform/langflow.env
+    environment:
+      LANGFLOW_HOST: 127.0.0.1
+      LANGFLOW_PORT: "7860"
+      LANGFLOW_DATABASE_URL: postgresql://langflow:langflow@127.0.0.1:5433/langflow
+      LANGFLOW_A2A_ENABLED: "true"
+      LANGFLOW_AUTO_LOGIN: "false"
+      LANGFLOW_CONFIG_DIR: /app/langflow
+      DO_NOT_TRACK: "true"
+    volumes:
+      - langflow-data:/app/langflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: langflow
+      POSTGRES_PASSWORD: langflow
+      POSTGRES_DB: langflow
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - langflow-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langflow"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  langflow-data:
+  langflow-postgres:

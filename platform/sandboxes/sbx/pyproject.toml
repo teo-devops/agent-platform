@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-sandbox-sbx"
+version = "0.1.0"
+description = "Sandbox backend 'sbx': the code an agent runs, in a Docker Sandboxes microVM."
+requires-python = ">=3.10"
+# Only the `sbx` CLI (Docker Sandboxes), on PATH.
+dependencies = [
+    "agent-core==0.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.entry-points."agent_platform.sandboxes"]
+"sbx" = "agent_sandbox_sbx:SbxSandbox"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_sandbox_sbx"]
