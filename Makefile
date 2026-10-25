@@ -295,12 +295,9 @@ $(LANGFLOW_ENV):
 langflow-up: $(LANGFLOW_ENV)
 	@if [ -n "$(LANGFLOW_OTEL)" ]; then \
 	  [ "$(MLFLOW_UP)" = yes ] || { echo "LANGFLOW_OTEL necesita MLflow en $(MLFLOW_URL): make mlflow-local"; exit 1; }; \
-	  id=$$(curl -sf "$(MLFLOW_URL)/api/2.0/mlflow/experiments/get-by-name?experiment_name=langflow" | sed -n 's/.*"experiment_id": *"\([0-9]*\)".*/\1/p'); \
-	  [ -n "$$id" ] || id=$$(curl -sf -X POST -H 'Content-Type: application/json' -d '{"name":"langflow"}' \
-	    "$(MLFLOW_URL)/api/2.0/mlflow/experiments/create" | sed -n 's/.*"experiment_id": *"\([0-9]*\)".*/\1/p'); \
-	  echo "  Trazas de Langflow -> MLflow, experimento 'langflow' ($$id)"; \
-	  LANGFLOW_MLFLOW_EXPERIMENT_ID=$$id $(LANGFLOW_COMPOSE) up -d; \
-	else $(LANGFLOW_COMPOSE) up -d; fi
+	  echo "  Trazas de Langflow -> $(MLFLOW_URL)/$(HASH)/experiments/0/traces, unidas a las de los agentes"; \
+	fi
+	@$(LANGFLOW_COMPOSE) up -d
 	@echo "  Esperando a Langflow en $(LANGFLOW_URL)..."
 	@for i in $$(seq 1 90); do curl -sf -o /dev/null $(LANGFLOW_URL)/health && break; sleep 2; done
 	@$(MAKE) --no-print-directory langflow-url

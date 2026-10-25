@@ -100,13 +100,15 @@ Langflow.
 
 ## 4. Observabilidad y evaluación *(eje inferido)*
 
-- ❌ **La traza no es una sola, ni siquiera con el OTel de Langflow activado.** Medido:
-  - Con `LANGFLOW_OTEL=1` (`deploy/langflow/compose.otel.yaml`), la petición A2A sigue llegando sin `traceparent`: un servidor espía sólo recibe `user-agent` y `a2a-version`.
-  - Es una decisión de Langflow: emite su span `a2a.message.send` por su cuenta "en lugar de instrumentar el transporte", y no trae instrumentación de `httpx`.
-  - Resultado: una pregunta a `tech-briefing` deja **tres trazas**. En el experimento `langflow` queda `POST /api/v1/run` con un `a2a.message.send` por agente (nombre, host y duración). En el de los agentes, una por agente, cada una con raíz en nuestro servidor A2A y `agent.name`.
-- **Cómo se leen juntas:** se correlacionan por agente y hora. El span de Langflow dice `a2a.agent.name=tech-researcher`, 16,3 s, y la traza del agente empieza en ese mismo intervalo.
-- **Ruido:** Langflow exporta unos 50 spans de base de datos por ejecución, además de health checks y login. Por eso va a su propio experimento y con `LANGFLOW_OTEL_DB_SPANS=false` (de 48 a 9 spans por ejecución).
-- **Para unirlas de verdad** haría falta que Langflow inyectara el contexto: instrumentación de `httpx`, o `traceparent` en los metadatos del mensaje A2A. Es un cambio en Langflow, no en esta plataforma.
+- ✅ **Una sola traza de Langflow al agente**, con `LANGFLOW_OTEL=1`. Sin ayuda no lo era, y se midió:
+  - Langflow emite su span `a2a.message.send` por su cuenta, "en lugar de instrumentar el transporte", y no manda `traceparent`: un servidor espía sólo recibía `user-agent` y `a2a-version`. Cada pregunta dejaba tres trazas, correlacionables sólo por agente y hora.
+  - **Por qué no basta `HTTPXClientInstrumentor`:** el exportador de Langflow sólo deja pasar sus propios *scopes* y descarta a propósito los de `httpx`, porque por ahí van también los SDK de LLM, con URL y claves. El agente quedaría colgando de un span que nunca llega a MLflow, y se tocarían todas las llamadas al LLM.
+  - **Lo que hay:** un hook sobre `httpx` (`platform/integrations/langflow/container/sitecustomize.py`, montado por `compose.otel.yaml`) que inyecta el contexto actual **sólo** en las peticiones a los hosts de `AGENT_TRACE_PROPAGATE_HOSTS` (loopback por defecto), sin crear spans. El padre del agente es el propio `a2a.message.send`.
+  - **Una pieza más:** el cliente del SDK de A2A abre sus propios spans (`a2a-python-sdk`), que el filtro también descarta. Con ellos, el agente colgaba de un span inexistente, así que se apagan (`OTEL_INSTRUMENTATION_A2A_SDK_ENABLED=false`): no se perdía nada, porque nunca se exportaban.
+  - **Resultado medido** (`tech-briefing`, una traza de 103 spans y 0 huérfanos): `POST /api/v1/run` → `flow.execute` → `a2a.message.send` (uno por agente) → `on_message_send` de nuestro servidor → `invoke_agent tech-researcher` → `call_llm` → `generate_content gemini-2.5-flash`. Ninguna traza suelta de los agentes.
+  - Langflow va al mismo experimento que los agentes (`0`): una traza no se reparte entre dos.
+- **Ruido:** Langflow exporta unos 50 spans de base de datos por ejecución, además de health checks y login. Con `LANGFLOW_OTEL_DB_SPANS=false` se quedan en 9 por ejecución. Los health checks y logins siguen siendo trazas aparte: se filtran por nombre en MLflow.
+- **Lo que depende de Langflow:** el hook confía en que `a2a.message.send` sea el span activo durante la llamada, y en que el nodo use `httpx`. Al subir de versión de Langflow se repite la medida (`tests/integrations/test_langflow_trace_hook.py` cubre el hook, no a Langflow).
 - **Evals:** `agentctl eval` mide agentes y workflows del catálogo, no flujos de Langflow. Como el flujo exportado reproduce un workflow del catálogo, la suite de ese workflow lo cubre. Un flujo hecho a mano en Langflow no lo cubre nada; es otro motivo para no hacerlos.
 - **Coste y tokens:** se cuentan en cada agente (`budget`) y aparecen en sus trazas. Langflow no los ve.
 
@@ -124,7 +126,7 @@ Langflow.
 
 ```bash
 make langflow-up                 # Langflow + Postgres, sólo en 127.0.0.1 (credenciales en .agent-platform/)
-LANGFLOW_OTEL=1 make langflow-up # lo mismo, con sus trazas en MLflow (experimento 'langflow'; necesita make mlflow-local)
+LANGFLOW_OTEL=1 make langflow-up # lo mismo, con su traza unida a la de los agentes en MLflow (necesita make mlflow-local)
 make a2a-catalog                 # el catálogo por A2A en :9101-9108 (otra terminal)
 agentctl --env local-a2a langflow agents                         # qué puede llamar Langflow, y dónde
 agentctl --env local-a2a langflow export tech-briefing --run "Kubernetes operators"

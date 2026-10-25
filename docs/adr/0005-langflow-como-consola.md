@@ -21,6 +21,6 @@ guarda los flujos en su base de datos.
 ## Consecuencias
 
 - Cambiar de consola es escribir otro exportador; los agentes no se enteran.
-- Langflow no propaga `traceparent`, ni siquiera con su OTel activado (verificado): sus trazas, en su propio experimento de MLflow, se correlacionan con las de los agentes por agente y hora; no se unen.
+- Langflow no propaga `traceparent` por sí mismo (verificado). Con `LANGFLOW_OTEL=1`, un hook sobre `httpx` montado en el contenedor lo inyecta sólo hacia los agentes, y la ejecución queda en una sola traza de MLflow, del flujo al LLM (verificado con 1.12.8). Es una pieza que se apoya en el interior de Langflow: se vuelve a medir en cada subida de versión.
 - Langflow manda un `messageId` nuevo en cada llamada: la deduplicación A2A cubre nuestros reintentos, no las re-ejecuciones de Langflow.
 - El HITL de Langflow sirve entre pasos; la aprobación dentro de un agente sigue pendiente (`spec.approvals`, Fase 3).
