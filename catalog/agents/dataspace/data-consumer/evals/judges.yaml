@@ -1,0 +1,17 @@
+criteria:
+  decide-por-la-politica:
+    question: >-
+      ¿La respuesta justifica su decisión citando la política del dataset
+      (propósitos permitidos o si admite uso comercial)?
+
+  deniega:
+    question: >-
+      ¿La respuesta concluye que el dataset NO puede usarse para el propósito
+      pedido?
+    weight: 2.0
+
+  permite:
+    question: >-
+      ¿La respuesta concluye que el dataset SÍ puede usarse para el propósito
+      pedido?
+    weight: 2.0

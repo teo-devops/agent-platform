@@ -1,0 +1,60 @@
+apiVersion: agents.platform/v1
+kind: EvalSuite
+metadata:
+  name: tech-writer
+spec:
+  target: tech-writer
+  metric: pass_at_1
+  threshold: 0.75
+  cases:
+    - id: articulo-desde-notas
+      description: El caso de siempre en el paso 2 de tech-article.
+      input: |
+        Notas sobre WebAssembly en el servidor:
+        - Qué es: formato binario portable que se ejecuta en un runtime aislado (Wasmtime, WasmEdge).
+        - Estado: WASI preview 2 estable; adopción en edge computing (a verificar: cifras de uso).
+        - Alternativas: contenedores, funciones serverless.
+        - Riesgos: ecosistema de librerías inmaduro, depuración más difícil.
+        - Preguntas abiertas: ¿rendimiento con E/S intensiva en nuestra carga?
+      expect:
+        matches: "(?m)^#{1,6} "
+        contains: ["Wasmtime", "a verificar"]
+      judge: [conserva-los-hechos, legible]
+      tags: [humo]
+
+    - id: no-anade-hechos
+      description: >-
+        Su trabajo es la claridad, no el contenido. Un redactor que añade datos
+        que no venían en las notas convierte el blog en una fuente de errores.
+      input: |
+        Notas sobre Rust en el equipo de backend:
+        - Dos servicios piloto reescritos en Rust.
+        - Menos incidencias de memoria en esos servicios.
+        - Curva de aprendizaje alta para el equipo.
+      expect:
+        matches: "(?m)^#{1,6} "
+      judge: [no-inventa-datos]
+      tags: [alucinacion]
+
+    - id: longitud-acotada
+      input: |
+        Notas sobre observabilidad con OpenTelemetry:
+        - Estándar abierto para trazas, métricas y logs.
+        - Un SDK por lenguaje; un collector que enruta a cualquier backend.
+        - Evita atarse a un proveedor de monitorización.
+        - Riesgo: el volumen de trazas sin muestreo dispara el coste.
+      expect:
+        max_chars: 7000
+      judge: [legible]
+      tags: [formato]
+
+    - id: conserva-lo-incierto
+      description: Lo que llega marcado "a verificar" sigue marcado; el redactor no lo convierte en hecho.
+      input: |
+        Notas sobre bases de datos vectoriales:
+        - Indexan embeddings para búsqueda por similitud.
+        - Opciones: pgvector, Qdrant, Milvus.
+        - Rendimiento con 100 millones de vectores: a verificar.
+      expect:
+        contains: ["a verificar", "pgvector"]
+      tags: [alucinacion]

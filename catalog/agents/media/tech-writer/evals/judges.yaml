@@ -1,0 +1,16 @@
+criteria:
+  conserva-los-hechos:
+    question: >-
+      ¿El artículo recoge cada punto de las notas (qué es, estado, alternativas,
+      riesgos, preguntas abiertas) sin cambiar su sentido?
+
+  legible:
+    question: >-
+      ¿El artículo tiene un título que dice de qué va, secciones claras y un
+      cierre con una conclusión práctica para el lector?
+
+  no-inventa-datos:
+    question: >-
+      ¿El artículo evita añadir cifras, nombres de empresas, fechas o resultados
+      que NO aparecían en las notas?
+    weight: 2.0

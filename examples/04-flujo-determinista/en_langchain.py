@@ -34,28 +34,29 @@ def construir():
     entrada, ejecutadas a la vez.
     """
     investigar = paso(
-        "You are an academic researcher. Produce structured research notes: "
-        "key facts, background, state of the art and open questions.",
+        "Eres analista de tecnología. Prepara notas estructuradas: qué es, "
+        "estado actual, alternativas, riesgos y preguntas abiertas. Marca "
+        "como *a verificar* lo que no puedas asegurar.",
         "tema",
     )
     redactar = paso(
-        "You are a science communicator. Turn the research notes into a "
-        "Markdown article. Keep every factual claim intact.",
+        "Eres redactor del blog de ingeniería. Convierte las notas en un "
+        "artículo en Markdown. Conserva cada afirmación de las notas.",
         "notas",
     )
     return investigar | (lambda notas: {"notas": notas}) | redactar
 
 
 def construir_en_abanico():
-    """El mismo `parallel-briefing` del repositorio: dos ramas, una entrada."""
+    """El mismo `tech-briefing` del repositorio: una tecnología, dos audiencias a la vez."""
     return RunnableParallel(
-        research=paso("You are an academic researcher. Give me the key facts.", "tema"),
-        explain=paso("You are a warm assistant. Explain it in three sentences.", "tema"),
+        technical=paso("Eres analista de tecnología. Dame los hechos clave y los riesgos.", "tema"),
+        executive=paso("Explícalo a alguien de negocio en tres frases, sin jerga.", "tema"),
     )
 
 
 def main() -> None:
-    print(construir().invoke({"tema": "arquitectura hexagonal"}))
+    print(construir().invoke({"tema": "WebAssembly en el servidor"}))
 
 
 if __name__ == "__main__":

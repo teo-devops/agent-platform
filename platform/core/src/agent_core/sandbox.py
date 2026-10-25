@@ -179,9 +179,9 @@ def sandbox_tools(
 
         def run(session: SandboxSession) -> dict[str, Any]:
             session.write_file(path, code)
-            return _result(session.exec(f"python {path}", timeout=timeout))
+            return _result(session.exec(f"python3 {path}", timeout=timeout))
 
-        return _run(sandbox, "run_python", run, command=f"python {path}")
+        return _run(sandbox, "run_python", run, command=f"python3 {path}")
 
     def sandbox_write_file(path: str, content: str) -> dict[str, Any]:
         """Writes a text file inside your isolated sandbox, replacing it if it exists.

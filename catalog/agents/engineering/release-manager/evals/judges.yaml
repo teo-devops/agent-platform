@@ -1,0 +1,17 @@
+criteria:
+  notas-para-usuarios:
+    question: >-
+      ¿Las notas describen cada cambio en términos de lo que nota quien usa el
+      producto, agrupado en secciones (novedades, correcciones), en vez de copiar
+      los commits tal cual?
+
+  explica-el-salto:
+    question: >-
+      ¿La respuesta dice que la versión sube de major PORQUE hay un cambio
+      incompatible, y lo señala en una sección propia?
+
+  admite-el-error:
+    question: >-
+      ¿La respuesta señala que la versión de partida no es válida, en vez de
+      proponer una versión siguiente?
+    weight: 2.0

@@ -16,7 +16,7 @@ SERVER_NAME = "agent-platform-catalog"
 
 
 def select_tools(registry: Registry[Any], patterns: list[str] | None = None) -> list[str]:
-    """The tool references to publish, filtered by glob (``health.*``)."""
+    """The tool references to publish, filtered by glob (``code.*``)."""
     names = sorted(registry.keys())
     if not patterns:
         return names
@@ -37,7 +37,7 @@ def build_server(
 ) -> FastMCP:
     """An MCP server publishing each selected tool under its platform reference.
 
-    The reference (``health.calculate_bmi``) is kept as the MCP tool name, so a
+    The reference (``code.metrics``) is kept as the MCP tool name, so a
     manifest, a trace and a kagent ``toolNames`` list all say the same thing.
     """
     server = FastMCP(

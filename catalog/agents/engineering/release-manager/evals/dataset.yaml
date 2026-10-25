@@ -1,0 +1,50 @@
+apiVersion: agents.platform/v1
+kind: EvalSuite
+metadata:
+  name: release-manager
+spec:
+  target: release-manager
+  metric: pass_at_1
+  threshold: 0.75
+  cases:
+    - id: feature-sube-minor
+      description: El caso de siempre. La versión es determinista, así que se comprueba sin juez.
+      input: |
+        Versión actual: 1.4.2
+        feat(api): paginación en /orders
+        fix: cierre de conexiones al reiniciar
+      expect:
+        contains: ["1.5.0"]
+        not_contains: ["2.0.0", "1.4.3"]
+      judge: [notas-para-usuarios]
+      tags: [humo]
+
+    - id: breaking-sube-major
+      input: |
+        Versión actual: 1.4.2
+        refactor!: elimina el endpoint /v1/orders
+        fix: typo en el mensaje de error
+      expect:
+        contains: ["2.0.0"]
+      judge: [explica-el-salto]
+      tags: [limites]
+
+    - id: breaking-en-cero
+      description: En 0.x un cambio incompatible sube la minor, no la major.
+      input: |
+        Versión actual: 0.3.1
+        feat!: nuevo formato de configuración
+      expect:
+        contains: ["0.4.0"]
+        not_contains: ["1.0.0"]
+      tags: [limites]
+
+    - id: version-invalida
+      description: Entrada inválida; que no se invente una versión.
+      input: |
+        Versión actual: la de ayer
+        fix: algo
+      expect:
+        not_contains: ["1.0.1", "0.0.1"]
+      judge: [admite-el-error]
+      tags: [limites]

@@ -1,0 +1,21 @@
+# Como `local`, pero los agentes con sandbox se aíslan con Docker Sandboxes (`sbx`):
+# microVMs con kernel propio.
+#
+# El perfil (configs/sandboxes.yaml) sigue diciendo QUÉ se aísla; este fichero
+# sólo dice CON QUIÉN. Ningún manifiesto cambia:
+#
+#   agentctl --env sandbox-sbx run python-executor -v -m "..."
+#   AGENT_SANDBOX_BACKEND=sbx agentctl run python-executor ...   # lo mismo, por variable
+
+agentDefaults:
+  model:
+    profile: fast
+  policies:
+    profile: relaxed
+
+workflowDefaults:
+  policies:
+    profile: relaxed
+
+sandbox:
+  backend: sbx

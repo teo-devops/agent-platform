@@ -1,6 +1,6 @@
 # 2 · Tools
 
-El modelo deja de inventarse las cuentas y llama a tu código.
+El modelo deja de inventarse la versión y llama a tu código.
 
 ## La idea
 
@@ -18,15 +18,21 @@ no importan ningún framework: el envoltorio lo pone cada runtime, y
 
 ## En la plataforma
 
-[`agents/health-advisor/agent.yaml`](../../agents/health-advisor/agent.yaml):
+[`release-manager`](../../catalog/agents/engineering/release-manager/agent.yaml):
+le das la versión publicada y los commits desde entonces, y devuelve la versión
+siguiente (semver) con sus notas de release. Decidir la versión es aritmética,
+no criterio, así que la hace una función de
+[`catalog/tools/release.py`](../../catalog/tools/release.py):
 
 ```yaml
 spec:
   tools:
-    - ref: health.calculate_bmi     # referencias, no imports
-    - ref: health.get_advice
+    - ref: release.parse_commits    # referencias, no imports
+    - ref: release.next_version
+    - ref: time.now
   permissions:
-    profile: health-only            # sólo health.* y time.*
+    tools:
+      allow: ["release.*", "time.*"]
   policies:
     max_tool_calls: 6               # techo, por si el modelo se emboba
 ```
@@ -40,10 +46,18 @@ Dos cosas que no se ven a simple vista:
    es la forma más rápida de gastarte el presupuesto de un mes en una tarde.
 
 ```bash
-agentctl run health-advisor -m "Peso 80 kg y mido 1.82 m, ¿cómo estoy?"
+agentctl run release-manager -m "Versión actual: 1.4.2. Commits: feat(api): paginación · refactor!: elimina /v1"
 ```
 
+Y como la versión es determinista, su suite de evals
+([`evals/`](../../catalog/agents/engineering/release-manager/evals/)) la comprueba
+con un `contains: ["2.0.0"]`, sin juez: gratis, instantáneo y sin falsos negativos.
+
 ## A mano
+
+Las funciones de los ejemplos son una versión corta de las del catálogo, para que
+cada fichero se lea solo.
+
 
 - [`en_adk.py`](en_adk.py) — `FunctionTool` envuelve la función.
 - [`en_langgraph.py`](en_langgraph.py) — `StructuredTool.from_function`, y el
@@ -54,5 +68,5 @@ agentctl run health-advisor -m "Peso 80 kg y mido 1.82 m, ¿cómo estoy?"
 ## Lo que conviene llevarse
 
 La función no sabe quién la llama. Esa es la razón por la que la misma
-`calculate_bmi` sirve en los tres frameworks sin tocar una línea, y la razón por
+`next_version` sirve en los tres frameworks sin tocar una línea, y la razón por
 la que merece la pena mantenerla así aunque hoy sólo uses uno.

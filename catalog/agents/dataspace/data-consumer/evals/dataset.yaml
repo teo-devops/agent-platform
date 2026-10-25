@@ -1,0 +1,43 @@
+apiVersion: agents.platform/v1
+kind: EvalSuite
+metadata:
+  name: data-consumer
+spec:
+  # En local, data-provider se construye en el mismo proceso; con --env local-a2a
+  # la misma suite mide la conversación por A2A.
+  target: data-consumer
+  metric: pass_at_1
+  threshold: 0.75
+  cases:
+    - id: comercial-denegado
+      description: La respuesta la decide la política de A, no el prompt de B.
+      input: "Datos de movilidad en bicicleta para un producto comercial"
+      expect:
+        contains: ["mobility-bcn-2025"]
+      judge: [decide-por-la-politica, deniega]
+      tags: [humo]
+
+    - id: investigacion-permitida
+      input: "Datos de movilidad en bicicleta para investigación"
+      expect:
+        contains: ["mobility-bcn-2025"]
+      judge: [decide-por-la-politica, permite]
+      tags: [humo]
+
+    - id: comercial-permitido
+      description: El mismo propósito comercial, otro dataset, otra respuesta.
+      input: "Datos de calidad del aire para una app comercial"
+      expect:
+        contains: ["air-quality-cat"]
+      judge: [permite]
+      tags: [limites]
+
+    - id: ninguno-sirve
+      description: >-
+        El dataset existe, pero la política no admite el propósito. Lo correcto
+        es decir que no se puede y por qué, no buscar otro que no venga a cuento.
+      input: "Datos de consumo eléctrico de edificios públicos para vender un informe"
+      expect:
+        contains: ["energy-buildings"]
+      judge: [deniega, decide-por-la-politica]
+      tags: [limites]

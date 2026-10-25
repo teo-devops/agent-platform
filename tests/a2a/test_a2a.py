@@ -32,6 +32,13 @@ def test_the_local_a2a_environment_places_the_specialists_elsewhere():
         "python-developer": "http://127.0.0.1:9101/",
         "code-reviewer": "http://127.0.0.1:9102/",
         "data-provider": "http://127.0.0.1:9103/",
+        # El resto del catálogo, para Langflow. No son sub-agentes de nadie: sólo
+        # dicen dónde llamarlos, no cambian cómo se construye ningún coordinador.
+        "tech-researcher": "http://127.0.0.1:9104/",
+        "tech-writer": "http://127.0.0.1:9105/",
+        "tech-explainer": "http://127.0.0.1:9106/",
+        "release-manager": "http://127.0.0.1:9107/",
+        "software-manager": "http://127.0.0.1:9108/",
     }
 
 
@@ -308,3 +315,49 @@ def test_the_circuit_opens_after_failures_in_a_row(transport):
     with pytest.raises(CircuitOpenError, match="3 times in a row"):
         delegate("hola")
     assert len(sent) == 3  # la cuarta ni se intentó
+
+
+# -- idempotencia --------------------------------------------------------------
+
+
+def test_a_repeated_message_id_runs_the_agent_once(store):
+    """Un reintento con el mismo messageId recibe la misma respuesta sin volver a ejecutar."""
+    from agent_a2a.client import _payload, answer_text
+    from agent_a2a.server import build_app
+    from starlette.testclient import TestClient
+
+    runs = []
+
+    class _CountingRuntime(_EchoRuntime):
+        async def stream(self, app, message):
+            runs.append(message)
+            yield f"respuesta {len(runs)}"
+
+    factory = _Factory(store)
+    factory.runtime = lambda name: _CountingRuntime()
+    with TestClient(build_app(factory, "python-developer", url="http://test/", log=io.StringIO())) as client:
+        payload = _payload("una mediana")
+        first = answer_text(client.post("/", json=payload).json()["result"])
+        again = answer_text(client.post("/", json=payload).json()["result"])
+        other = answer_text(client.post("/", json=_payload("una mediana")).json()["result"])
+
+    assert first == again == "respuesta 1"
+    assert other == "respuesta 2", "otro messageId es otra petición"
+    assert len(runs) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_failure_is_not_remembered():
+    from agent_a2a.server import Deduplicator
+
+    seen, attempts = Deduplicator(), []
+
+    async def flaky():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("503")
+        return "bien"
+
+    with pytest.raises(RuntimeError):
+        await seen.run("m-1", flaky)
+    assert await seen.run("m-1", flaky) == ("bien", False)

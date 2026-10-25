@@ -7,7 +7,8 @@ frameworks already share — so none of them has to learn about deadlines.
 
 Retrying a stream is only safe while nothing has been yielded: once the caller
 has printed half an answer, running the agent again would print a different
-first half. And some failures are verdicts, not accidents — a guardrail that
+first half. An invocation that ends without saying anything is retried too: an
+empty answer is not an answer. And some failures are verdicts, not accidents — a guardrail that
 blocked will block again — so those are never retried.
 
 The cost side is plain arithmetic, framework-free too: the runtimes count tokens
@@ -80,9 +81,17 @@ def guarded_stream(
                     try:
                         chunk = await _next(iterator, deadline)
                     except StopAsyncIteration:
-                        return
-                    yielded = True
+                        break
+                    yielded = yielded or bool(chunk.strip())
                     yield chunk
+                if yielded or attempt >= retry_attempts:
+                    return
+                # Terminó sin decir nada. Gemini lo hace a veces tras una ronda de
+                # tools: no es una respuesta, es un fallo transitorio más.
+                attempt += 1
+                log_event(logger, "empty answer, retrying", agent=agent, attempt=attempt)
+                await asyncio.sleep(backoff * 2 ** (attempt - 1))
+                continue
             except asyncio.TimeoutError:
                 log_event(logger, "invocation timed out", agent=agent, limit=timeout_seconds)
                 raise InvocationTimeout(

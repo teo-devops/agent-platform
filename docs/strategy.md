@@ -113,19 +113,31 @@ plataforma*, no un framework. Por eso entra como **backend**, no como concepto.
 
 | | Qué | Estado |
 |---|---|---|
-| 2.1 | `spec.sandbox` neutro + perfiles en `configs/sandboxes.yaml` (`code-exec`, `dev-workspace`, `openshell-workspace`) | ✅ |
+| 2.1 | `spec.sandbox` neutro + perfiles en `configs/sandboxes.yaml` (`code-exec`, `dev-workspace`) | ✅ |
 | 2.2 | Grupo `agent_platform.sandboxes`; backend `local` (Docker: sin red por defecto, raíz de sólo lectura, `nobody`, sin capabilities, tmpfs) en `platform/sandboxes/local` | ✅ |
 | 2.3 | Tools `sandbox.exec`, `sandbox.run_python`, `sandbox.write_file`, `sandbox.read_file`, ligadas a cada agente y sujetas a `permissions.tools` | ✅ |
 | 2.4 | Agente de ejemplo `python-executor` (`make caso-10`); `kagent render` rechaza un agente con sandbox en modo declarativo | ✅ |
-| 2.5 | Backend `openshell`: traducir `spec.sandbox` a la política de OpenShell (como `agent-kagent/render.py` traduce a CRDs) y abrir/cerrar sandboxes por su CLI o API. **Antes, fijar la versión de OpenShell y validar su esquema de política: está en alpha** | ⏳ |
+| 2.5 | Backend `openshell` (`platform/sandboxes/openshell`): `render_policy` + CLI v0.1.x; `agentctl openshell policy` para auditar | ✅ verificado con OpenShell 0.1.5 (Landlock, egress por host, suite de `python-executor`) |
+| 2.5b | Backend `sbx` (Docker Sandboxes, microVM por sandbox) en `platform/sandboxes/sbx` | ✅ verificado con sbx v0.42 |
+| 2.5c | El proveedor lo elige el entorno (`sandbox.backend`, `AGENT_SANDBOX_BACKEND`), [ADR 0006](adr/0006-sandbox-es-decision-de-entorno.md) | ✅ |
 | 2.6 | Backend `k8s`: pod por sandbox con gVisor/Kata (o el CRD `agent-sandbox` de Kubernetes SIGs), para el carril clúster y los agentes BYO | ⏳ |
-| 2.7 | Runtime `harness`: un agente de coding externo (Claude Code, Codex, OpenCode) dentro de un sandbox OpenShell, servido por A2A como un sub-agente más | ⏳ |
+| 2.7 | Runtime `harness`: un agente de coding externo (Claude Code, Codex, OpenCode) dentro de un sandbox, servido por A2A como un sub-agente más. `sbx create claude` ya lo hace del lado de Docker | ⏳ |
 | 2.8 | `deploy/openshell/release.yaml`, simétrico a `deploy/kagent/release.yaml` | ⏳ |
 
 Lo que el backend `local` **no** hace, y avisa al abrir: filtrar la salida por
 nombre de host (Docker no sabe) y enrutar la inferencia por una pasarela. Para
 eso está OpenShell. Y un contenedor comparte kernel con el host: sirve para
 desarrollar, no es una frontera contra un atacante decidido.
+
+### Consola — Langflow
+
+| | Qué | Estado |
+|---|---|---|
+| C.1 | Evaluación crítica en 5 ejes ([`control-plane.md`](control-plane.md)) y [ADR 0005](adr/0005-langflow-como-consola.md): Langflow es la consola, no el motor | ✅ |
+| C.2 | `agent-langflow`: `export` de agentes y workflows a flujos de nodos A2A; Langflow 1.12.8 + Postgres en loopback | ✅ verificado (agente, secuencial, paralelo) |
+| C.3 | Deduplicación por `messageId` en `a2a serve` | ✅ |
+| C.4 | Traza única Langflow → agente (`traceparent`) | ✅ verificado con `LANGFLOW_OTEL=1`: Langflow no lo propaga solo; lo inyecta un hook sobre `httpx` sólo hacia los agentes |
+| C.5 | Autenticación A2A para sacar Langflow de loopback | ⏳ Fase 1 |
 
 ### Fase 3 — Agentes autónomos
 

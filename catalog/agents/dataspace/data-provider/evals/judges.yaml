@@ -1,0 +1,12 @@
+criteria:
+  politica-tal-cual:
+    question: >-
+      ¿La respuesta da la política de uso de cada dataset tal como es (propósitos
+      permitidos y si admite uso comercial), sin suavizarla ni prometer
+      excepciones?
+    weight: 2.0
+
+  admite-que-no-hay:
+    question: >-
+      ¿La respuesta dice claramente que no ofrece datos sobre ese tema, sin
+      proponer datasets que no existen?

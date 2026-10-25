@@ -1,6 +1,6 @@
 """Component registries with entry-point discovery.
 
-A registry maps a stable *reference* (``"health.calculate_bmi"``) to a Python
+A registry maps a stable *reference* (``"code.metrics"``) to a Python
 object. References are what configuration files use, so a config never imports
 Python: it names a component and the platform resolves it.
 
@@ -172,7 +172,7 @@ class Registry(Generic[T]):
         return sorted({*self._items, *self._pending})
 
     def match(self, pattern: str) -> list[str]:
-        """References matching a glob pattern such as ``"health.*"``."""
+        """References matching a glob pattern such as ``"code.*"``."""
         return [ref for ref in self.keys() if fnmatch.fnmatch(ref, pattern)]
 
     def __contains__(self, ref: object) -> bool:

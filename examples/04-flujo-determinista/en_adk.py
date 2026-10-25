@@ -28,9 +28,9 @@ def construir() -> App:
         name="research",
         model="gemini-2.5-flash",
         instruction=(
-            "You are an academic researcher. Produce structured research notes: "
-            "key facts, background, state of the art and open questions. Mark "
-            "anything uncertain as uncertain."
+            "Eres analista de tecnología. Prepara notas estructuradas: qué es, "
+            "estado actual, alternativas, riesgos y preguntas abiertas. Marca "
+            "como *a verificar* lo que no puedas asegurar."
         ),
         output_key="research_notes",
     )
@@ -38,18 +38,18 @@ def construir() -> App:
         name="write",
         model="gemini-2.5-flash",
         instruction=(
-            "You are a science communicator. Turn the research notes into a "
-            "Markdown article. Keep every factual claim intact."
+            "Eres redactor del blog de ingeniería. Convierte las notas en un "
+            "artículo en Markdown. Conserva cada afirmación de las notas."
         ),
         output_key="article",
     )
 
     flujo = Workflow(
-        name="research_and_write",
-        description="Deterministic research pipeline.",
+        name="tech_article",
+        description="De un tema a un artículo para el blog de ingeniería.",
         edges=[(START, investigador), (investigador, redactor)],
     )
-    return App(name="research_and_write", root_agent=flujo)
+    return App(name="tech_article", root_agent=flujo)
 
 
 async def main() -> None:
@@ -58,7 +58,7 @@ async def main() -> None:
         app_name=runner.app_name, user_id="demo", session_id="demo-1"
     )
     mensaje = types.Content(
-        role="user", parts=[types.Part.from_text(text="arquitectura hexagonal")]
+        role="user", parts=[types.Part.from_text(text="WebAssembly en el servidor")]
     )
     async for evento in runner.run_async(
         user_id="demo", session_id="demo-1", new_message=mensaje

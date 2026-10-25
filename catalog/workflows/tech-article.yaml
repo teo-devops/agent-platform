@@ -1,0 +1,17 @@
+apiVersion: agents.platform/v1
+kind: Workflow
+metadata:
+  name: tech-article
+  version: 0.1.0
+  description: De un tema a un artículo para el blog de ingeniería. El orden lo fija el YAML, no el modelo.
+  owner: media-team
+  tags: [demo, sequential, media]
+spec:
+  type: sequential
+  nodes:
+    - name: research
+      agent: tech-researcher
+      description: Reúne los hechos sobre los que se construye el artículo.
+    - name: write
+      agent: tech-writer
+      description: Convierte esos hechos en un artículo legible.

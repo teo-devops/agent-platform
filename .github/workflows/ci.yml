@@ -28,7 +28,8 @@ jobs:
       - name: Install
         run: make install
       - name: Lint
-        run: .venv/bin/pip install -q ruff && .venv/bin/ruff check .
+        # Versión fijada: cada serie nueva de ruff añade reglas y rompería el CI sin cambiar el código.
+        run: .venv/bin/pip install -q ruff==0.15.12 && .venv/bin/ruff check .
       - name: Tests (incluida la prueba del sandbox con Docker real)
         run: make test
         env:
@@ -52,7 +53,8 @@ jobs:
       - name: Build
         run: docker build -t agent-platform/${{ matrix.image }}:ci -f deploy/images/Dockerfile.${{ matrix.image }} .
       - name: Vulnerabilities (fails on fixable HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        # Por SHA, no por etiqueta: las etiquetas de este action se han reescrito antes.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: agent-platform/${{ matrix.image }}:ci
           severity: HIGH,CRITICAL

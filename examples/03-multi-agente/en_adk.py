@@ -19,16 +19,16 @@ def especialistas() -> tuple[LlmAgent, LlmAgent]:
         name="python_developer",
         model="gemini-2.5-flash",
         instruction=(
-            "You are a senior Python developer. Given a requirement, write one "
-            "clean, PEP8-compliant function with type hints and a docstring."
+            "Eres desarrollador Python senior. Dado un requisito, escribe una única "
+            "función limpia, conforme a PEP 8, con type hints y docstring."
         ),
     )
     revisor = LlmAgent(
         name="code_reviewer",
         model="gemini-2.5-flash",
         instruction=(
-            "You are a code reviewer. Report correctness bugs and edge cases "
-            "first, then real performance or security concerns."
+            "Eres revisor de código. Informa primero de bugs y casos límite, "
+            "después de problemas reales de rendimiento o seguridad."
         ),
     )
     return desarrollador, revisor
@@ -38,7 +38,7 @@ def construir() -> App:
     """Delegación por herramienta: el coordinador no suelta el control.
 
     `AgentTool` convierte un agente en algo que el coordinador llama igual que
-    llamaría a `calculate_bmi`. La alternativa —pasar los hijos en
+    llamaría a una función de `catalog/tools/`. La alternativa —pasar los hijos en
     `sub_agents=[...]`— haría que ADK pudiera transferirles el turno, y entonces
     quien responde al usuario deja de ser quien tú crees.
     """
@@ -48,9 +48,9 @@ def construir() -> App:
         name="software_manager",
         model="gemini-2.5-flash",
         instruction=(
-            "You are a software development manager. You never write or review "
-            "code yourself. Delegate the implementation to python_developer, "
-            "then send the result to code_reviewer, and summarise both."
+            "Eres jefe de desarrollo. Nunca escribes ni revisas código tú. Delega "
+            "la implementación en python_developer, pasa el resultado a "
+            "code_reviewer y resume ambos."
         ),
         tools=[AgentTool(agent=desarrollador), AgentTool(agent=revisor)],
         # sub_agents=[desarrollador, revisor],  # <- esto sería 'transfer'

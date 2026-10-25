@@ -120,7 +120,7 @@ def test_a_tool_the_server_does_not_publish_is_an_error(factory):
 
 def test_workflows_are_not_kagent_agents(factory):
     with pytest.raises(ConfigError, match="Workflow"):
-        render(factory, _release(agents=[{"name": "research-and-write", "mode": "declarative"}]))
+        render(factory, _release(agents=[{"name": "tech-article", "mode": "declarative"}]))
 
 
 def test_byo_needs_a_runtime(factory):

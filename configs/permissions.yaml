@@ -18,14 +18,6 @@ profiles:
       allow: []
       deny: ["*"]
 
-  health-only:
-    tools:
-      allow: ["health.*", "time.*"]
-      deny: []
-    agents:
-      allow: []
-      deny: ["*"]
-
   delegation-only:
     tools:
       allow: []

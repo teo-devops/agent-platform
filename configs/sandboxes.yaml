@@ -2,10 +2,13 @@
 # may reach from there. An agent without `spec.sandbox` has no sandbox, and the
 # `sandbox.*` tools are refused when it is built.
 #
-# The profile says WHAT is isolated. HOW is the backend's business:
-#   local      a Docker container on this machine (development)
-#   openshell  an NVIDIA OpenShell sandbox: the same policy, enforced out of process
-#   k8s        a pod with gVisor/Kata (cluster lane)
+# The profile says WHAT is isolated. WHO isolates is a decision of the
+# environment (`sandbox.backend` in configs/environments/<env>.yaml, or
+# AGENT_SANDBOX_BACKEND), so the same profile runs on any of them:
+#   local      a locked-down Docker container on this machine (development)
+#   sbx        Docker Sandboxes: a microVM with its own kernel per sandbox
+#   openshell  NVIDIA OpenShell: Landlock + seccomp, policy enforced out of process
+# The `backend:` below is only the default when the environment says nothing.
 #
 # Network egress is deny-by-default everywhere: an agent reaches only what is listed.
 
@@ -13,7 +16,7 @@ profiles:
   # Run snippets of Python: no network, no model, a scratch directory.
   code-exec:
     backend: local
-    image: python:3.12-slim
+    image: agent-platform/sandbox:0.1.0   # make sandbox-image
     filesystem:
       read: ["/workspace"]
       write: ["/workspace"]
@@ -35,7 +38,7 @@ profiles:
   # A development workspace: may install packages and read public repositories.
   dev-workspace:
     backend: local
-    image: python:3.12-slim
+    image: agent-platform/sandbox:0.1.0   # make sandbox-image
     filesystem:
       read: ["/workspace"]
       write: ["/workspace"]
@@ -53,26 +56,3 @@ profiles:
       memory: 2Gi
       command_timeout_seconds: 300
       ttl_seconds: 3600
-
-  # The same workspace, isolated by NVIDIA OpenShell instead of a plain container.
-  # Model calls from inside go through the platform gateway, never with a key.
-  openshell-workspace:
-    backend: openshell
-    image: python:3.12-slim
-    filesystem:
-      read: ["/workspace", "/usr", "/lib", "/etc"]
-      write: ["/workspace"]
-    network:
-      egress:
-        default: deny
-        allow: ["pypi.org", "files.pythonhosted.org", "github.com"]
-    process:
-      allow_exec: true
-      max_procs: 64
-    inference:
-      route: platform
-    resources:
-      cpu: "2"
-      memory: 4Gi
-      command_timeout_seconds: 600
-      ttl_seconds: 7200

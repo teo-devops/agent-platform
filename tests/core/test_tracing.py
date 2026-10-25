@@ -24,7 +24,7 @@ def test_without_endpoint_tracing_is_a_no_op(monkeypatch, store):
     tracing.reset_for_tests()
 
     assert tracing.configure_tracing() is False
-    with tracing.agent_span(store.load("greeting"), "adk") as span:
+    with tracing.agent_span(store.load("tech-explainer"), "adk") as span:
         assert span is None
 
 
@@ -40,10 +40,10 @@ def test_prompt_hash_ignores_surrounding_whitespace():
 
 
 def test_agent_attributes_identify_version_framework_and_prompt(store):
-    manifest = store.load("health-advisor")
+    manifest = store.load("release-manager")
     attributes = tracing.agent_attributes(manifest, "langgraph")
 
-    assert attributes["agent.name"] == "health-advisor"
+    assert attributes["agent.name"] == "release-manager"
     assert attributes["agent.version"] == manifest.metadata.version
     assert attributes["agent.framework"] == "langgraph"
     assert attributes["prompt.hash"] == tracing.prompt_hash(manifest.spec.prompt.instruction)
@@ -68,7 +68,7 @@ _SCRIPT = textwrap.dedent(
     from agent_core.telemetry import agent_span
 
     factory = load_platform(root=ROOT, environment="local", load_env_file=False)
-    manifest = factory.store.load("greeting")
+    manifest = factory.store.load("tech-explainer")
     with agent_span(manifest, "adk", "hola"):
         with trace.get_tracer("t").start_as_current_span("child"):
             pass
@@ -93,8 +93,8 @@ def test_spans_carry_agent_attributes_and_reuse_the_host_provider():
     ).stdout.strip().splitlines()[-1]
     spans = json.loads(output)
 
-    root = spans["invoke_agent greeting"]
-    assert root["agent.name"] == "greeting"  # the explicit attribute wins
+    root = spans["invoke_agent tech-explainer"]
+    assert root["agent.name"] == "tech-explainer"  # the explicit attribute wins
     assert root["agent.framework"] == "adk"
     assert root["input.value"] == "hola"
     assert "prompt.hash" in root

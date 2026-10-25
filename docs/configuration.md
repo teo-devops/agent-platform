@@ -100,7 +100,7 @@ Una herramienta registrada que el agente puede llamar.
 
 | campo | tipo | por defecto | qué hace |
 |---|---|---|---|
-| `ref` | `string` | **obligatorio** | Referencia registrada, p. ej. `health.calculate_bmi`. Mírales el nombre con `agentctl components`. |
+| `ref` | `string` | **obligatorio** | Referencia registrada, p. ej. `release.next_version`. Mírales el nombre con `agentctl components`. |
 | `alias` | `string` | — | Otro nombre con el que el modelo verá la herramienta. |
 | `enabled` | `boolean` | `True` | Ponlo a false en un overlay de entorno para quitarla sin tocar el manifiesto. |
 | `params` | mapa | — | Parámetros fijos para la herramienta. |
@@ -217,7 +217,7 @@ Listas de patrones. `deny` gana siempre sobre `allow`.
 
 | campo | tipo | por defecto | qué hace |
 |---|---|---|---|
-| `allow` | lista de `string` | — | Patrones permitidos, p. ej. `["health.*"]`. |
+| `allow` | lista de `string` | — | Patrones permitidos, p. ej. `["code.*"]`. |
 | `deny` | lista de `string` | — | Patrones prohibidos. `deny` gana siempre sobre `allow`. |
 
 ### `FilesystemSpec`
