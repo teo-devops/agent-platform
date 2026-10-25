@@ -24,3 +24,9 @@ a2a:
     python-developer: http://127.0.0.1:9101/
     code-reviewer: http://127.0.0.1:9102/
     data-provider: http://127.0.0.1:9103/     # la "organización A" del caso dataspace
+    # El resto del catálogo, para llamarlo desde Langflow (make a2a-catalog).
+    tech-researcher: http://127.0.0.1:9104/
+    tech-writer: http://127.0.0.1:9105/
+    tech-explainer: http://127.0.0.1:9106/
+    release-manager: http://127.0.0.1:9107/
+    software-manager: http://127.0.0.1:9108/

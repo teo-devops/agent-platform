@@ -12,8 +12,10 @@ with kagent's SDK; this one needs no cluster.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import time
+from collections import OrderedDict
 from typing import Any
 
 from agent_core.execution import stream_with_policies
@@ -21,6 +23,52 @@ from agent_core.telemetry import agent_span
 
 #: Port range ``make a2a-up`` uses; one agent per port.
 DEFAULT_PORT = 9100
+#: How many answers are remembered per agent, and for how long, to recognise a retry.
+DEDUP_SIZE = 256
+DEDUP_TTL = 600.0
+
+
+class Deduplicator:
+    """Answers a repeated ``messageId`` with the answer it already produced.
+
+    ``message/send`` is not idempotent: an agent with tools may already have
+    written a file or opened a sandbox. When a caller retries with the same
+    ``messageId`` (our client does, after a 502), running the agent again would
+    do it all twice. The second request waits for the
+    first (if it is still running) and gets the same answer. Failures are not
+    remembered: a retry after an error does run again.
+    """
+
+    def __init__(self, *, size: int = DEDUP_SIZE, ttl: float = DEDUP_TTL) -> None:
+        self.size = size
+        self.ttl = ttl
+        self._entries: OrderedDict[str, tuple[float, asyncio.Future]] = OrderedDict()
+
+    async def run(self, key: str | None, produce: Any) -> tuple[str, bool]:
+        """``(answer, repeated)``; ``produce`` is awaited only for a new key."""
+        if not key:
+            return await produce(), False
+        self._expire()
+        if key in self._entries:
+            return await asyncio.shield(self._entries[key][1]), True
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._entries[key] = (time.monotonic(), future)
+        while len(self._entries) > self.size:
+            self._entries.popitem(last=False)
+        try:
+            answer = await produce()
+        except BaseException as exc:
+            self._entries.pop(key, None)
+            future.set_exception(exc)
+            future.exception()  # retrieved: nobody else may be waiting
+            raise
+        future.set_result(answer)
+        return answer, False
+
+    def _expire(self) -> None:
+        limit = time.monotonic() - self.ttl
+        while self._entries and next(iter(self._entries.values()))[0] < limit:
+            self._entries.popitem(last=False)
 
 
 def agent_card(manifest: Any, *, url: str, runtime: str) -> Any:
@@ -62,20 +110,29 @@ def build_app(factory: Any, name: str, *, url: str, log: Any = sys.stderr) -> An
     runtime = factory.runtime(factory.runtime_name(result.manifest))
     app = runtime.app(result)
 
+    seen = Deduplicator()
+
     class PlatformExecutor(AgentExecutor):
         """One A2A request -> one run of the agent -> one text message back."""
 
         async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
             request = context.get_user_input()
             started = time.monotonic()
+            message_id = getattr(context.message, "message_id", None)
             print(f"⇠ A2A {name}: {_preview(request)}", file=log, flush=True)
-            try:
+
+            async def produce() -> str:
                 with agent_span(result.manifest, runtime.name, request):
-                    answer = "".join([chunk async for chunk in stream_with_policies(runtime, app, request, result.manifest)])
+                    chunks = stream_with_policies(runtime, app, request, result.manifest)
+                    return "".join([chunk async for chunk in chunks])
+
+            try:
+                answer, repeated = await seen.run(message_id, produce)
             except Exception as exc:  # noqa: BLE001 - the caller gets it as an A2A error
                 print(f"✗ {name}: {type(exc).__name__}: {exc}", file=log, flush=True)
                 raise ServerError(error=InternalError(message=f"{type(exc).__name__}: {exc}")) from exc
-            print(f"⇢ {name} ({time.monotonic() - started:.1f}s): {_preview(answer)}", file=log, flush=True)
+            mark = " (repetido: misma respuesta, sin ejecutar otra vez)" if repeated else ""
+            print(f"⇢ {name} ({time.monotonic() - started:.1f}s){mark}: {_preview(answer)}", file=log, flush=True)
             await event_queue.enqueue_event(new_agent_text_message(answer, context.context_id, context.task_id))
 
         async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:

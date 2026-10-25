@@ -1,0 +1,28 @@
+# Langflow con sus trazas OpenTelemetry hacia el mismo MLflow que los agentes.
+#
+#   LANGFLOW_OTEL=1 make langflow-up
+#
+# Una sola traza por ejecución: el hook de platform/integrations/langflow/container
+# manda `traceparent` en cada llamada A2A a los agentes, que continúan la traza
+# del flujo. Por eso va al mismo experimento que ellos (0): una traza no se
+# reparte entre dos.
+#
+# Sólo trazas: el endpoint por señal evita que Langflow mande también logs y
+# métricas a MLflow, que no los acepta. Sin spans de base de datos (~50 por
+# ejecución), que enterrarían los del agente. Resultado medido en docs/control-plane.md.
+services:
+  langflow:
+    environment:
+      OTEL_SERVICE_NAME: langflow
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://127.0.0.1:5500/v1/traces
+      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_TRACES_HEADERS: x-mlflow-experiment-id=0
+      LANGFLOW_OTEL_DB_SPANS: "false"
+      PYTHONPATH: /opt/agent-platform
+      AGENT_TRACE_PROPAGATE_HOSTS: 127.0.0.1,localhost
+      # Los spans del cliente del SDK de A2A no pasan el filtro de Langflow: el
+      # agente quedaría colgando de uno que no existe. Sin ellos, su padre es
+      # `a2a.message.send`, que sí se exporta.
+      OTEL_INSTRUMENTATION_A2A_SDK_ENABLED: "false"
+    volumes:
+      - ../../platform/integrations/langflow/container/sitecustomize.py:/opt/agent-platform/sitecustomize.py:ro

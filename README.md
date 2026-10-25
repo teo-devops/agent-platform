@@ -403,7 +403,7 @@ tools llama cada uno y qué viaja por A2A.
 | 7 | `make caso-7` | El 3 por **A2A**: cada sub-agente en **su proceso y su framework** | La terminal de `make a2a-up` |
 | 8 | `make caso-8` | `data-consumer` → `data-provider`: **dos organizaciones** por A2A. B pregunta a A qué datos tiene y decide si su política permite el uso | La terminal de `make a2a-up` |
 | 9 | `make lab` | `software-manager` en **kagent**: A2A entre **pods** | El [chat del jefe](http://localhost:8082/agents/kagent/software-manager/chat) en kagent |
-| 10 | `make caso-10` | `python-executor`: escribe el código y **lo ejecuta en un sandbox** (Docker sin red, raíz de sólo lectura) antes de responder | `docker ps --filter label=agent-platform.sandbox=local` |
+| 10 | `make caso-10` | `python-executor`: escribe el código y **lo ejecuta en un sandbox** antes de responder. El proveedor lo elige el entorno: `ENV=sandbox-sbx` (microVM de Docker Sandboxes) o `ENV=sandbox-openshell` (NVIDIA OpenShell); sin `ENV`, un contenedor local | `sbx ls` · `docker ps --filter label=agent-platform.sandbox=local` |
 
 Para jugar con cualquiera:
 
@@ -522,6 +522,7 @@ salto es A2A: nadie construye copias de los hijos dentro de su pod.
 | └ chat de `software-manager` | http://localhost:8082/agents/kagent/software-manager/chat | | El jefe de desarrollo: orquesta a los otros dos por A2A |
 | └ chat de `code-reviewer` | http://localhost:8082/agents/kagent/code-reviewer/chat | | Revisor declarativo: tools `code.*` por MCP + skill |
 | └ chat de `python-developer` | http://localhost:8082/agents/kagent/python-developer/chat | | Desarrollador BYO (LangGraph dentro de kagent) |
+| **Langflow** | http://127.0.0.1:7860 | `make langflow-up` (+ `make a2a-catalog`) | La consola: flujos generados del catálogo (`agentctl langflow export`) que llaman a los agentes por A2A. [Evaluación](docs/control-plane.md) |
 | **MLflow** | http://localhost:5500 | `make lab` o `make mlflow-local` | Backend de AgentOps |
 | └ Trazas | http://localhost:5500/#/experiments/0/traces | | Una traza por pregunta, con `agent.*` y `prompt.*` |
 | └ Versiones de agente | http://localhost:5500/#/experiments/0/models | | Un `LoggedModel` por `nombre@versión` |
@@ -555,7 +556,8 @@ agent-platform/
 │   ├── a2a/                   agent-a2a: servir un agente por A2A, o delegar en uno remoto
 │   ├── kagent/                agent-kagent: manifiesto -> CRDs de kagent; host de agentes BYO
 │   ├── integrations/mlflow/   agent-mlflow: el único paquete que conoce MLflow
-│   └── sandboxes/local/       agent-sandbox-local: spec.sandbox -> contenedor Docker bloqueado
+│   ├── integrations/langflow/ agent-langflow: Langflow como consola, por A2A
+│   └── sandboxes/             local (contenedor) · sbx (microVM de Docker) · openshell (NVIDIA)
 │
 ├── catalog/                   LO QUE SE EJECUTA — lo toca cada equipo
 │   ├── agents/<dominio>/<nombre>/   technology · media · engineering · dataspace · platform
@@ -668,6 +670,7 @@ Cómo se combinan las capas (flota, entorno, agente, override): [`docs/configura
 
 ## Documentación
 
+- [`docs/control-plane.md`](docs/control-plane.md) — Langflow como consola: evaluación crítica en 5 ejes y cómo se usa.
 - [`docs/strategy.md`](docs/strategy.md) — hacia dónde va: robustez, seguridad, sandbox (OpenShell), agentes autónomos y boilerplate para organizaciones. Las decisiones, en [`docs/adr/`](docs/adr/).
 - [`docs/concepts.md`](docs/concepts.md) — framework vs runtime vs protocolo; cómo viaja una petición.
 - [`docs/demo.md`](docs/demo.md) — el guion de la demo (25′ y 15′), con plan B.
