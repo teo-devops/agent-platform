@@ -64,6 +64,7 @@ Todo lo que se puede cambiar de un agente sin tocar código.
 | `guardrails` | [`GuardrailsSpec`](#guardrailsspec) | — | Qué se comprueba antes y después del modelo. |
 | `policies` | [`PolicySpec`](#policyspec) | — | Cuánto trabajo puede hacer una invocación. |
 | `permissions` | [`PermissionSpec`](#permissionspec) | — | Qué puede alcanzar. Se comprueba al construir y al llamar. |
+| `sandbox` | [`SandboxSpec`](#sandboxspec) | — | Dónde se ejecuta el código que lanza el agente y qué alcanza desde ahí. Sin `backend`, no hay sandbox y las tools `sandbox.*` no se adjuntan. |
 | `plugins` | lista de [`PluginRef`](#pluginref) | — | Plugins extra, más allá de los derivados de lo anterior. |
 | `output_key` | `string` | — | Nombre con el que su respuesta queda en el estado compartido, para que otro paso la lea. |
 
@@ -80,6 +81,7 @@ Qué modelo responde y con qué ajustes de generación.
 | `top_k` | `integer` | — | Muestreo por k. Gemini lo tiene; OpenAI no. Un runtime que no lo entienda lo ignora avisando. |
 | `max_output_tokens` | `integer` | — | Techo de tokens de la respuesta. |
 | `stop_sequences` | lista de `string` | — | Cadenas que cortan la generación. No todos los proveedores las aplican igual. |
+| `pricing` | [`ModelPricing`](#modelpricing) | — | Precio del modelo. Sin él, `budget.max_usd` no puede contar y se avisa al construir. |
 
 ### `PromptSpec`
 
@@ -144,8 +146,8 @@ Cuánto trabajo puede hacer una invocación. Lo aplica el runtime, no se le pide
 | `profile` | `string` | — | Perfil de configs/policies.yaml del que se hereda. |
 | `max_tool_calls` | `integer` | — | Techo de llamadas a herramienta por invocación. |
 | `max_llm_calls` | `integer` | — | Techo de llamadas al modelo por invocación. |
-| `timeout_seconds` | `number` | — | Declarado y validado; todavía no lo aplica ningún runtime. |
-| `retry_attempts` | `integer` | `0` | Reintentos. Es el único límite que cruza al orquestador, como `retries` de cada paso. |
+| `timeout_seconds` | `number` | — | Tiempo máximo de una invocación, reintentos incluidos. Al pasarlo, la ejecución se corta. |
+| `retry_attempts` | `integer` | `0` | Reintentos ante fallos transitorios, sólo mientras no se haya emitido nada. Un guardrail o un permiso no se reintentan. |
 | `budget` | [`BudgetSpec`](#budgetspec) | — | Techos de coste de una invocación. |
 
 ### `PermissionSpec`
@@ -158,6 +160,19 @@ Qué puede alcanzar. Se comprueba al construir y otra vez al llamar.
 | `tools` | [`AllowDeny`](#allowdeny) | — | Qué herramientas puede alcanzar. |
 | `agents` | [`AllowDeny`](#allowdeny) | — | A qué agentes puede delegar. Lista distinta de la de herramientas, a propósito. |
 
+### `SandboxSpec`
+
+| campo | tipo | por defecto | qué hace |
+|---|---|---|---|
+| `profile` | `string` | — | Perfil de configs/sandboxes.yaml del que se hereda. |
+| `backend` | `string` | — | Quién aísla: `local`, `openshell`, `k8s`... Vacío, el agente no tiene sandbox. |
+| `image` | `string` | — | Imagen base del sandbox, si el backend usa contenedores. |
+| `filesystem` | [`FilesystemSpec`](#filesystemspec) | — | Qué ve del sistema de ficheros. |
+| `network` | [`NetworkSpec`](#networkspec) | — | Qué alcanza por red. |
+| `process` | [`ProcessSpec`](#processspec) | — | Qué procesos puede lanzar. |
+| `inference` | [`InferenceSpec`](#inferencespec) | — | Si dentro se puede llamar a un modelo. |
+| `resources` | [`ResourceSpec`](#resourcespec) | — | CPU, memoria y tiempos. |
+
 ### `PluginRef`
 
 Un plugin extra, más allá de los que se derivan de las secciones anteriores.
@@ -167,6 +182,13 @@ Un plugin extra, más allá de los que se derivan de las secciones anteriores.
 | `ref` | `string` | **obligatorio** | Plugin registrado, más allá de los que salen de guardrails/permisos/política. |
 | `enabled` | `boolean` | `True` | Permite desactivarlo por entorno. |
 | `config` | mapa | — | Configuración que recibe el plugin. |
+
+### `ModelPricing`
+
+| campo | tipo | por defecto | qué hace |
+|---|---|---|---|
+| `input_per_mtok` | `number` | **obligatorio** | Dólares por millón de tokens de entrada. |
+| `output_per_mtok` | `number` | **obligatorio** | Dólares por millón de tokens de salida. |
 
 ### `GuardrailRule`
 
@@ -187,7 +209,7 @@ Techos de coste de una invocación.
 | campo | tipo | por defecto | qué hace |
 |---|---|---|---|
 | `max_tokens` | `integer` | — | Techo de tokens de una invocación. |
-| `max_usd` | `number` | — | Declarado, todavía no contabilizado: hoy el corte se hace por tokens. |
+| `max_usd` | `number` | — | Techo en dólares de una invocación. Se calcula con `model.pricing`. |
 
 ### `AllowDeny`
 
@@ -197,6 +219,48 @@ Listas de patrones. `deny` gana siempre sobre `allow`.
 |---|---|---|---|
 | `allow` | lista de `string` | — | Patrones permitidos, p. ej. `["health.*"]`. |
 | `deny` | lista de `string` | — | Patrones prohibidos. `deny` gana siempre sobre `allow`. |
+
+### `FilesystemSpec`
+
+| campo | tipo | por defecto | qué hace |
+|---|---|---|---|
+| `read` | lista de `string` | — | Rutas legibles. |
+| `write` | lista de `string` | — | Rutas escribibles. Siempre un subconjunto de lo legible. |
+
+### `NetworkSpec`
+
+| campo | tipo | por defecto | qué hace |
+|---|---|---|---|
+| `egress` | [`EgressSpec`](#egressspec) | — | Conexiones salientes. |
+
+### `ProcessSpec`
+
+| campo | tipo | por defecto | qué hace |
+|---|---|---|---|
+| `allow_exec` | `boolean` | `True` | Si puede lanzar procesos. A false, sólo lee y escribe ficheros. |
+| `max_procs` | `integer` | — | Techo de procesos simultáneos. |
+
+### `InferenceSpec`
+
+| campo | tipo | por defecto | qué hace |
+|---|---|---|---|
+| `route` | `none` \| `platform` \| `direct` | `none` | `none`: sin modelo dentro. `platform`: sólo por la pasarela de la plataforma (las credenciales no entran en el sandbox). `direct`: el sandbox habla con el proveedor. |
+
+### `ResourceSpec`
+
+| campo | tipo | por defecto | qué hace |
+|---|---|---|---|
+| `cpu` | `string` | — | CPU, en unidades de Kubernetes (`500m`, `2`). |
+| `memory` | `string` | — | Memoria, en unidades de Kubernetes (`512Mi`). |
+| `command_timeout_seconds` | `number` | `60` | Tiempo máximo de cada comando. |
+| `ttl_seconds` | `integer` | — | Vida máxima del sandbox. Vacío, vive lo que la invocación. |
+
+### `EgressSpec`
+
+| campo | tipo | por defecto | qué hace |
+|---|---|---|---|
+| `default` | `deny` \| `allow` | `deny` | Qué pasa con un destino no listado. |
+| `allow` | lista de `string` | — | Hosts permitidos (`pypi.org`, `*.github.com`). |
 
 
 ---

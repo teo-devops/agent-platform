@@ -118,6 +118,23 @@ class AgentFactory:
             ) from None
         return transport(name=name, url=url)
 
+    def sandbox_tools(self, manifest: Any) -> dict[str, Any]:
+        """The ``sandbox.*`` functions of this agent, bound to its own sandbox.
+
+        Empty when the manifest declares no sandbox. Each builder wraps them the
+        way it wraps any other tool, and maps their names to these references so
+        the call-time permission check sees them.
+        """
+        from agent_core.sandbox import LazySandbox, check_sandbox_refs, resolve_backend, sandbox_tools
+
+        spec = manifest.spec
+        check_sandbox_refs(manifest.name, spec.sandbox, [ref.ref for ref in spec.enabled_tools])
+        if not spec.sandbox.enabled:
+            return {}
+        backend = resolve_backend(spec.sandbox, self.registries.sandboxes, agent=manifest.name)
+        sandbox = LazySandbox(spec.sandbox, backend, agent=manifest.name)
+        return sandbox_tools(sandbox, spec.permissions)
+
     def participants(self, name: str) -> tuple[dict[str, str], dict[str, str]]:
         """Who can show up when ``name`` runs, by the names the frameworks use.
 

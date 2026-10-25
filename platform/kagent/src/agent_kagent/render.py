@@ -105,6 +105,12 @@ def _declarative(release, entry, manifest, factory, published, released, prompt_
     spec, ns, name = manifest.spec, release.spec.namespace, manifest.name
     if not spec.prompt.instruction:
         raise ConfigError(f"agent '{name}': spec.prompt is empty")
+    if spec.sandbox.enabled:
+        # Sin sandbox el agente perdería sus tools sandbox.*: no es un aviso, es otro agente.
+        raise ConfigError(
+            f"agent '{name}' declares a sandbox ({spec.sandbox.backend}), which kagent's declarative "
+            f"runtime cannot provide; use mode: byo"
+        )
     _warn_unenforced(name, spec, warnings)
 
     tools: list[dict[str, Any]] = []

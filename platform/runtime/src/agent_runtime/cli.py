@@ -17,6 +17,7 @@ from importlib.metadata import entry_points
 
 import yaml
 from agent_core.errors import PlatformError
+from agent_core.execution import stream_with_policies
 from agent_core.registry import COMMANDS_GROUP, EVAL_SINKS_GROUP
 from agent_core.telemetry import agent_span, flush
 
@@ -120,7 +121,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     async def _run() -> None:
         print(f"[{args.name} @ {factory.environment} on {runtime.name}] > {args.message}\n", flush=True)
         with agent_span(result.manifest, runtime.name, args.message):
-            async for chunk in runtime.stream(app, args.message):
+            async for chunk in stream_with_policies(runtime, app, args.message, result.manifest):
                 # With narration on stderr, a chunk left mid-line would glue the
                 # next narrated step onto the answer.
                 end = "\n" if args.verbose and not chunk.endswith("\n") else ""
@@ -306,7 +307,7 @@ def _target_runner(factory: Any, runtime: Any, target: str):
     async def run(message: str) -> str:
         with agent_span(result.manifest, runtime.name, message) as span:
             trace_ids.append(format(span.get_span_context().trace_id, "032x") if span else None)
-            chunks = [chunk async for chunk in runtime.stream(app, message)]
+            chunks = [chunk async for chunk in stream_with_policies(runtime, app, message, result.manifest)]
         return "".join(chunks)
 
     #: One per call, in order: the engine runs the cases one after another.

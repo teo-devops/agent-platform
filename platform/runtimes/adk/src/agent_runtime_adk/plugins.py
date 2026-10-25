@@ -26,6 +26,7 @@ def build_plugins(
     agent_aliases: dict[str, str] | None = None,
     audit: bool = True,
     attributes: dict[str, str] | None = None,
+    pricing: Any = None,
 ) -> list[Any]:
     """Build the plugin instances for one agent, in enforcement order."""
     plugins: list[Any] = []
@@ -46,12 +47,15 @@ def build_plugins(
         )
     )
 
-    if policies.max_tool_calls or policies.max_llm_calls or policies.budget.max_tokens:
+    budget = policies.budget
+    if policies.max_tool_calls or policies.max_llm_calls or budget.max_tokens or budget.max_usd is not None:
         plugins.append(
             PolicyPlugin(
                 max_tool_calls=policies.max_tool_calls,
                 max_llm_calls=policies.max_llm_calls,
-                max_tokens=policies.budget.max_tokens,
+                max_tokens=budget.max_tokens,
+                max_usd=budget.max_usd,
+                pricing=pricing,
                 agent=agent,
                 name=f"{agent}.policy",
             )

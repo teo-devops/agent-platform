@@ -15,7 +15,8 @@ AGENTCTL := $(BIN)/agentctl
 PKGS := "platform/core[tracing]" platform/runtime \
         "platform/runtimes/adk[tracing]" "platform/runtimes/langgraph[tracing]" \
         "platform/runtimes/langchain[tracing]" \
-        platform/mcp platform/a2a platform/kagent platform/integrations/mlflow
+        platform/mcp platform/a2a platform/kagent platform/integrations/mlflow \
+        platform/sandboxes/local
 
 # -- lab ----------------------------------------------------------------------
 CLUSTER   ?= agent-lab
@@ -48,7 +49,7 @@ MLFLOW_HINT := $(if $(MLFLOW_UP),Trazas en $(MLFLOW_URL)/$(HASH)/experiments/0/t
 
 .PHONY: help install test validate list run export schema docs eval eval-run \
         mlflow-local mlflow-init dev-adk dev-langgraph dev-langchain mcp mcp-inspector \
-        casos caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8 \
+        casos caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8 caso-10 test-sandbox \
         a2a-up a2a-run a2a-cards a2a-ensure a2a-down kagent-a2a \
         lab cluster-up images skills platform deploy render prompts register refresh-tools metrics \
         status ui-urls cluster-down clean
@@ -58,6 +59,7 @@ help:
 	@echo "Desarrollo"
 	@echo "  make install         .venv con todos los paquetes en modo editable"
 	@echo "  make test            tests (ninguno llama al modelo)"
+	@echo "  make test-sandbox    el backend de sandbox local con un contenedor real (Docker)"
 	@echo "  make validate        construye todos los manifiestos sin llamar al modelo"
 	@echo "  make eval            valida las suites de evals (sin clave)"
 	@echo "  make eval-run        ejecuta las suites y las publica en MLflow (con clave)"
@@ -98,6 +100,10 @@ install: $(BIN)/python
 
 test:
 	$(BIN)/python -m pytest -q
+
+# La prueba del sandbox con un contenedor de verdad (necesita Docker).
+test-sandbox:
+	AGENT_SANDBOX_DOCKER_TESTS=1 $(BIN)/python -m pytest -q tests/sandboxes tests/core/test_sandbox.py
 
 validate:
 	$(AGENTCTL) validate
@@ -185,6 +191,7 @@ casos:
 	@echo "  make caso-6   review-loop          bucle desarrollador <-> revisor"
 	@echo "  make caso-7   software-manager     el caso 3 por A2A: cada sub-agente en su proceso y framework"
 	@echo "  make caso-8   data-consumer        dos organizaciones hablando por A2A (dataspace)"
+	@echo "  make caso-10  python-executor      escribe código y lo EJECUTA en un sandbox aislado (Docker)"
 	@echo ""
 	@echo "  Opciones: MSG=\"...\" (tu mensaje)  RUNTIME=adk|langgraph|langchain (otro framework)"
 	@echo ""
@@ -231,6 +238,11 @@ caso-8: CASO_MSG   := Datos de movilidad en bicicleta para un producto comercial
 caso-8: CASO_ENV   := --env local-a2a
 caso-8: CASO_UI     = la organización A, en la terminal de make a2a-up (o tail -f $(A2A_LOG)). Prueba MSG='Datos de movilidad en bicicleta para investigación'
 
+caso-10: CASO_AGENT := python-executor
+caso-10: CASO_TITLE := Código ejecutado en un sandbox: sin red, raíz de sólo lectura, /workspace en memoria
+caso-10: CASO_MSG   := Una función que calcule la mediana de una lista de números
+caso-10: CASO_UI    := docker ps --filter label=agent-platform.sandbox=local (mientras corre) · configs/sandboxes.yaml
+
 # Los casos A2A necesitan a los sub-agentes escuchando: si no están, se levantan solos.
 caso-7 caso-8: a2a-ensure
 
@@ -238,7 +250,7 @@ caso-7 caso-8: a2a-ensure
 CASO_MESSAGE = $(if $(filter command line environment,$(origin MSG)),$(MSG),$(CASO_MSG))
 CASO_ARGS    = $(if $(RUNTIME),--runtime $(RUNTIME) )$(if $(CASO_ENV),$(CASO_ENV) )run $(CASO_AGENT) -v -m
 
-caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8:
+caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8 caso-10:
 	@echo ""
 	@echo "  Caso $(@:caso-%=%) · $(CASO_TITLE)"
 	@echo "  \$$ agentctl $(CASO_ARGS) '$(CASO_MESSAGE)'"

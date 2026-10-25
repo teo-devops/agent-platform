@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from agent_core.errors import GuardrailViolation, PermissionDeniedError
+from agent_core.execution import check_budget
 from agent_core.guardrails import evaluate
 from agent_core.schemas import GuardrailsSpec, PermissionSpec, PolicySpec
 from agent_core.telemetry import get_logger, log_event
@@ -37,8 +38,10 @@ class Enforcement:
         guardrails: GuardrailsSpec,
         policies: PolicySpec,
         permissions: PermissionSpec,
+        pricing: Any = None,
     ) -> None:
         self.agent = agent
+        self.pricing = pricing
         self.name = f"{agent}.enforcement"
         self.guardrails = guardrails
         self.policies = policies
@@ -131,6 +134,17 @@ class Enforcement:
                 f"agent '{self.agent}' reached its ceiling of "
                 f"{self.policies.max_tool_calls} tool calls"
             )
+        check_budget(self.agent, self.policies.budget, self.pricing, *_token_usage(messages))
+
+
+def _token_usage(messages: list[Any]) -> tuple[int, int]:
+    """Input and output tokens spent so far, from each answer's ``usage_metadata``."""
+    spent_in = spent_out = 0
+    for message in messages:
+        usage = getattr(message, "usage_metadata", None) or {}
+        spent_in += int(usage.get("input_tokens") or 0)
+        spent_out += int(usage.get("output_tokens") or 0)
+    return spent_in, spent_out
 
 
 def _kind(message: Any) -> str:

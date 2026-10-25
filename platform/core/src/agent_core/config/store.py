@@ -9,6 +9,7 @@ Layout expected under the repository root::
     configs/guardrails.yaml         named guardrail profiles
     configs/policies.yaml           named policy profiles
     configs/permissions.yaml        named permission profiles
+    configs/sandboxes.yaml          named sandbox profiles
     configs/environments/<env>.yaml per-environment overrides
 
 Resolution order for an agent (later layers win)::
@@ -51,6 +52,7 @@ _PROFILE_SECTIONS = {
     "guardrails": "guardrails",
     "policies": "policies",
     "permissions": "permissions",
+    "sandbox": "sandboxes",
 }
 
 

@@ -58,6 +58,12 @@ class AgentBuilder:
                 )
             )
         aliases = dict(resolved.aliases)
+
+        # Sandbox: sus tools van ligadas a su propio sandbox y pasan por permisos.
+        for ref, funcion in factory.sandbox_tools(manifest).items():
+            tools.append(StructuredTool.from_function(func=funcion, name=funcion.__name__,
+                                                      description=funcion.__doc__))
+            aliases[funcion.__name__] = ref
         plugins: list[Any] = []
 
         for ref in spec.enabled_sub_agents:
@@ -89,6 +95,7 @@ class AgentBuilder:
             policies=spec.policies,
             permissions=spec.permissions,
             aliases=aliases,
+            pricing=spec.model.pricing,
         )
 
         agent = create_agent(

@@ -16,6 +16,7 @@ from .common import (
     PluginRef,
     PolicySpec,
     PromptSpec,
+    SandboxSpec,
     SkillRef,
     Spec,
     SubAgentRef,
@@ -43,6 +44,11 @@ class AgentBody(Spec):
     guardrails: GuardrailsSpec = Field(default_factory=GuardrailsSpec, description="Qué se comprueba antes y después del modelo.")
     policies: PolicySpec = Field(default_factory=PolicySpec, description="Cuánto trabajo puede hacer una invocación.")
     permissions: PermissionSpec = Field(default_factory=PermissionSpec, description="Qué puede alcanzar. Se comprueba al construir y al llamar.")
+    sandbox: SandboxSpec = Field(
+        default_factory=SandboxSpec,
+        description="Dónde se ejecuta el código que lanza el agente y qué alcanza desde ahí. "
+                    "Sin `backend`, no hay sandbox y las tools `sandbox.*` no se adjuntan.",
+    )
     plugins: list[PluginRef] = Field(default_factory=list, description="Plugins extra, más allá de los derivados de lo anterior.")
     output_key: str | None = Field(
         default=None,

@@ -44,6 +44,10 @@ EVAL_SINKS_GROUP = "agent_platform.eval_sinks"
 #: process (``a2a``). Each entry is ``factory(name=..., url=...)`` and returns a
 #: delegate: callable with the request text, plus an async ``acall``.
 TRANSPORTS_GROUP = "agent_platform.transports"
+#: Entry-point group for sandbox backends (``local``, ``openshell``...). Each
+#: entry is a class or object with ``name`` and ``open(spec, agent=...)``; see
+#: :mod:`agent_core.sandbox`.
+SANDBOXES_GROUP = "agent_platform.sandboxes"
 
 
 @dataclass(frozen=True)
@@ -193,6 +197,7 @@ class Registries:
     builders: Registry[Any] = field(default_factory=lambda: Registry("builders", BUILDERS_GROUP))
     runtimes: Registry[Any] = field(default_factory=lambda: Registry("runtimes", RUNTIMES_GROUP))
     transports: Registry[Any] = field(default_factory=lambda: Registry("transports", TRANSPORTS_GROUP))
+    sandboxes: Registry[Any] = field(default_factory=lambda: Registry("sandboxes", SANDBOXES_GROUP))
 
     @classmethod
     def default(cls) -> "Registries":

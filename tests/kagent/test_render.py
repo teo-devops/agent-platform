@@ -162,3 +162,9 @@ def test_a_byo_agent_without_sub_agents_gets_no_endpoints(factory):
     (agent,) = render(factory, _release()).files["agent-python-developer.yaml"]
     names = {e["name"] for e in agent["spec"]["byo"]["deployment"]["env"]}
     assert "AGENT_A2A_ENDPOINTS" not in names
+
+
+def test_a_sandboxed_agent_cannot_be_declarative(factory):
+    """Sin sandbox perdería sus tools `sandbox.*`: sería otro agente, no un aviso."""
+    with pytest.raises(ConfigError, match="declares a sandbox"):
+        render(factory, _release(agents=[{"name": "python-executor", "mode": "declarative"}]))

@@ -366,6 +366,7 @@ tools llama cada uno y qué viaja por A2A.
 | 7 | `make caso-7` | El 3 por **A2A**: cada sub-agente en **su proceso y su framework** | La terminal de `make a2a-up` |
 | 8 | `make caso-8` | `data-consumer` → `data-provider`: **dos organizaciones** por A2A. B pregunta a A qué datos tiene y decide si su política permite el uso | La terminal de `make a2a-up` |
 | 9 | `make lab` | `software-manager` en **kagent**: A2A entre **pods** | El [chat del jefe](http://localhost:8082/agents/kagent/software-manager/chat) en kagent |
+| 10 | `make caso-10` | `python-executor`: escribe el código y **lo ejecuta en un sandbox** (Docker sin red, raíz de sólo lectura) antes de responder | `docker ps --filter label=agent-platform.sandbox=local` |
 
 Para jugar con cualquiera:
 
@@ -516,14 +517,15 @@ agent-platform/
 │   ├── mcp/                   agent-mcp: catalog/tools por MCP
 │   ├── a2a/                   agent-a2a: servir un agente por A2A, o delegar en uno remoto
 │   ├── kagent/                agent-kagent: manifiesto -> CRDs de kagent; host de agentes BYO
-│   └── integrations/mlflow/   agent-mlflow: el único paquete que conoce MLflow
+│   ├── integrations/mlflow/   agent-mlflow: el único paquete que conoce MLflow
+│   └── sandboxes/local/       agent-sandbox-local: spec.sandbox -> contenedor Docker bloqueado
 │
 ├── catalog/                   LO QUE SE EJECUTA — lo toca cada equipo
 │   ├── agents/<dominio>/<nombre>/   starter · health · content · engineering · quality
 │   ├── workflows/*.yaml
 │   ├── skills/<nombre>/SKILL.md     instrucciones que el agente lee bajo demanda
 │   └── tools/*.py                   funciones sueltas: soltar un .py y ya
-├── configs/                   perfiles (modelos, guardrails, permisos, políticas) y entornos
+├── configs/                   perfiles (modelos, guardrails, permisos, políticas, sandboxes) y entornos
 ├── evals/<objetivo>/          datasets y criterios: medir, no suponer
 │
 ├── deploy/                    LO QUE LO OPERA
@@ -533,7 +535,7 @@ agent-platform/
 │   ├── images/                Dockerfiles: agent-host, mcp, mlflow, skill
 │   └── scripts/
 │
-├── docs/                      concepts · demo · architecture · configuration
+├── docs/                      strategy · concepts · demo · architecture · configuration · adr/
 ├── examples/                  la escalera de 4 escalones, a mano en los 3 frameworks
 ├── tests/                     core · runtime · runtimes · mcp · kagent · integrations · catalog
 └── .agent-platform/           TODO lo generado (puentes de UI, CRDs, contratos). Ignorado por git
@@ -612,6 +614,8 @@ Todo esto es una edición de YAML más `agentctl validate`:
 - **Tools** — por referencia (`code.find_smells`); añadir una es soltar un `.py` en `catalog/tools/`.
 - **Skills** — `spec.skills: [hexagonal-architecture@^1.0]`; al prompt sólo viaja el índice.
 - **Guardrails, políticas y permisos** — perfiles en `configs/`, con overrides por agente.
+  Timeout, reintentos y presupuesto en tokens o dólares se aplican de verdad.
+- **Sandbox** — `spec.sandbox: {profile: code-exec}` y el agente ejecuta código aislado; el backend (`local`, después `openshell`) es un perfil.
 - **Topología** — un agente pasa a ser paso de un workflow, o delega en otros (`sub_agents`).
 - **Dónde vive cada sub-agente** — en proceso o por A2A: `a2a.endpoints` en el entorno.
 - **Framework** — `spec.runtime: adk | langgraph | langchain`.
@@ -627,6 +631,7 @@ Cómo se combinan las capas (flota, entorno, agente, override): [`docs/configura
 
 ## Documentación
 
+- [`docs/strategy.md`](docs/strategy.md) — hacia dónde va: robustez, seguridad, sandbox (OpenShell), agentes autónomos y boilerplate para organizaciones. Las decisiones, en [`docs/adr/`](docs/adr/).
 - [`docs/concepts.md`](docs/concepts.md) — framework vs runtime vs protocolo; cómo viaja una petición.
 - [`docs/demo.md`](docs/demo.md) — el guion de la demo (25′ y 15′), con plan B.
 - [`docs/architecture.md`](docs/architecture.md) — paquetes, entry points, paridad entre frameworks, límites conocidos.

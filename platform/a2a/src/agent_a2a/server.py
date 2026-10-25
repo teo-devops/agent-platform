@@ -16,6 +16,7 @@ import sys
 import time
 from typing import Any
 
+from agent_core.execution import stream_with_policies
 from agent_core.telemetry import agent_span
 
 #: Port range ``make a2a-up`` uses; one agent per port.
@@ -70,7 +71,7 @@ def build_app(factory: Any, name: str, *, url: str, log: Any = sys.stderr) -> An
             print(f"⇠ A2A {name}: {_preview(request)}", file=log, flush=True)
             try:
                 with agent_span(result.manifest, runtime.name, request):
-                    answer = "".join([chunk async for chunk in runtime.stream(app, request)])
+                    answer = "".join([chunk async for chunk in stream_with_policies(runtime, app, request, result.manifest)])
             except Exception as exc:  # noqa: BLE001 - the caller gets it as an A2A error
                 print(f"✗ {name}: {type(exc).__name__}: {exc}", file=log, flush=True)
                 raise ServerError(error=InternalError(message=f"{type(exc).__name__}: {exc}")) from exc

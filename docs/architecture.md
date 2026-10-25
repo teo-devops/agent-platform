@@ -36,8 +36,10 @@ platform/
 ├── mcp/                  agent-mcp               catalog/tools servido por MCP
 ├── a2a/                  agent-a2a               un agente servido por A2A; delegar en uno remoto
 ├── kagent/               agent-kagent            manifiesto -> CRDs de kagent; host BYO
-└── integrations/
-    └── mlflow/           agent-mlflow            prompts, versiones de agente, evals y métricas
+├── integrations/
+│   └── mlflow/           agent-mlflow            prompts, versiones de agente, evals y métricas
+└── sandboxes/
+    └── local/            agent-sandbox-local     spec.sandbox -> contenedor Docker bloqueado
 ```
 
 ### `agent-core` — neutro de verdad
@@ -63,6 +65,11 @@ Cero imports de cualquier framework, y hay un test que lo comprueba
   sin framework.
 - `publish.py` — la forma resuelta de un manifiesto: mismo documento, con las
   dependencias escritas y las versiones pinneadas.
+- `execution.py` — `timeout_seconds` y `retry_attempts` alrededor de
+  `Runtime.stream`, y la aritmética de `budget` (tokens y dólares). Ver
+  [ADR 0001](adr/0001-limites-de-ejecucion-en-el-core.md).
+- `sandbox.py` — el contrato de un backend de sandbox y las tools `sandbox.*`,
+  construidas por agente. Ver [Sandbox](#sandbox-dónde-se-ejecuta-lo-que-el-agente-ejecuta).
 - `guardrails/` — evaluación de reglas sobre texto, sin red. Los tres runtimes la
   reutilizan tal cual.
 - `telemetry/` — logging estructurado y **tracing OpenTelemetry opcional**
@@ -163,6 +170,7 @@ points, así que **instalar un paquete es lo que hace que su capacidad exista**:
 | `agent_platform.commands` | `mcp`, `a2a`, `kagent`, `integrations/mlflow` | `agentctl` (subcomandos) |
 | `agent_platform.transports` | `a2a` | la fábrica, al construir un sub-agente remoto |
 | `agent_platform.eval_sinks` | `integrations/mlflow` | `agentctl eval --sink` |
+| `agent_platform.sandboxes` | `sandboxes/local` | la fábrica, al construir un agente con `spec.sandbox` |
 
 ```text
 agent-core  <-  agent-runtime  <-  runtimes/*  ·  mcp  ·  kagent  ·  integrations/mlflow
@@ -248,6 +256,55 @@ justo para lo que existe. Y cuando su respuesta no se puede leer, el caso
 **suspende** — dar por bueno lo que no se entendió convertiría la suite en
 decorado.
 
+## Sandbox: dónde se ejecuta lo que el agente ejecuta
+
+Hasta aquí todas las tools eran puras, porque no había dónde ejecutar nada sin
+riesgo. `spec.sandbox` es ese sitio, y separa dos preguntas
+([ADR 0002](adr/0002-sandbox-enchufable.md)):
+
+- **Qué se aísla** — neutro, en el manifiesto o en un perfil de
+  `configs/sandboxes.yaml`: ficheros legibles y escribibles, salida de red
+  (*deny* por defecto), procesos, si dentro se puede llamar a un modelo, CPU,
+  memoria y tiempos.
+- **Cómo** — un backend instalado bajo `agent_platform.sandboxes`. Hoy `local`
+  (Docker); después `openshell` y `k8s` ([ADR 0003](adr/0003-openshell-como-backend.md)).
+
+```yaml
+spec:
+  sandbox:
+    profile: code-exec        # backend local, sin red, /workspace en memoria
+  permissions:
+    tools:
+      allow: ["sandbox.*"]
+```
+
+Con eso el agente recibe `sandbox_exec`, `sandbox_run_python`,
+`sandbox_write_file` y `sandbox_read_file` (sin `process.allow_exec`, sólo las
+de ficheros). Se construyen en `agent_core/sandbox.py` **por agente**, ligadas
+a su propio sandbox, y cada builder sólo las envuelve. Tres decisiones:
+
+- **Pasan por `permissions.tools`**, al revés que las de skills: ejecutar un
+  comando es alcanzar el mundo, y un entorno tiene que poder prohibirlo
+  (`deny: ["sandbox.exec"]`).
+- **El sandbox se abre en la primera llamada**, no al construir: `validate` y
+  los playgrounds construyen el catálogo entero sin arrancar un contenedor.
+- **Un fallo es una respuesta**, `{"error": ...}`, no una excepción: el modelo
+  lee qué pasó y corrige, igual en los tres frameworks.
+
+Cómo cumple el backend `local` cada parte, y qué no puede cumplir (lo avisa al abrir):
+
+| Del spec | En Docker |
+|---|---|
+| `filesystem.write` | un `tmpfs` por ruta; el resto de la imagen, `--read-only` |
+| `network.egress` deny sin hosts | `--network none` |
+| `network.egress.allow: [hosts]` | ❌ Docker no filtra por host: red completa, con aviso. Para eso, `openshell` |
+| `process` | `--pids-limit`, `--cap-drop ALL`, `no-new-privileges`, uid `nobody` |
+| `inference.route: platform` | ❌ no hay pasarela local; aviso |
+| `resources` | `--cpus`, `--memory`, timeout por comando, `ttl` como vida del contenedor |
+
+Un contenedor comparte kernel con el host: `local` sirve para desarrollar, no
+es una frontera contra un atacante decidido.
+
 ## Paridad entre runtimes
 
 No es completa, y fingir que lo es sería peor que la tabla. Cada ❌ tiene una
@@ -258,6 +315,9 @@ razón de diseño del framework, no una tarea pendiente:
 | Guardrails de entrada/salida | ✅ plugins de `App` | ✅ `pre_model_hook` / `post_model_hook` | ✅ `AgentMiddleware` |
 | Permisos de herramienta | ✅ en build y en llamada | ✅ en build y en llamada | ✅ en build y en `wrap_tool_call` |
 | Techos de llamadas | ✅ | ✅ | ✅ |
+| Presupuesto `max_tokens` / `max_usd` | ✅ | ✅ | ✅ |
+| Timeout y reintentos (`agentctl run`, `eval`, `a2a serve`) | ✅ | ✅ | ✅ |
+| Sandbox (`sandbox.*`) | ✅ | ✅ | ✅ |
 | Delegación `mode: tool` | ✅ | ✅ | ✅ |
 | Delegación `mode: transfer` | ✅ nativo | ❌ el control va por aristas | ❌ sin equivalente |
 | Flujo `sequential` / `parallel` | ✅ | ✅ | ✅ |
@@ -318,10 +378,19 @@ en otro runtime.
 - LangGraph Studio sirve su API en local pero la interfaz se sirve desde
   `smith.langchain.com` y se conecta a tu `localhost`. En una red que lo bloquee,
   la API sigue en pie y la UI no. `adk web` no tiene ese problema.
-- `timeout_seconds` y `retry_attempts` se declaran y se validan, pero hoy no se
-  aplican en el runtime; están pendientes de conectar con `RunConfig`.
-- `budget.max_usd` se declara pero no se contabiliza: el corte por coste se hace
-  hoy con `budget.max_tokens`.
+- `timeout_seconds` y `retry_attempts` se aplican alrededor de `Runtime.stream`
+  (`agentctl run`, `eval`, `a2a serve`), **no en el host BYO de kagent**, que
+  ejecuta con el SDK de kagent.
+- `budget.max_usd` cuenta con `model.pricing`. Un modelo sin precio no corta por
+  dólares; por eso todo perfil de `configs/models.yaml` lo lleva.
+- **Un reintento sólo ocurre si no se ha emitido nada**, y nunca tras un
+  guardrail o un permiso. En A2A, sólo si la petición no llegó (conexión
+  rechazada, 502/503/504): `message/send` no es idempotente. Tras tres fallos
+  seguidos a una URL, el delegado falla rápido 30 s (`AGENT_A2A_BREAKER_*`).
+- **Un agente con `spec.sandbox` no puede ir como declarativo en kagent**, y el
+  backend `local` necesita Docker: en un pod BYO hará falta el backend `k8s`.
+- **La sesión de sandbox vive lo que el agente construido**: en `a2a serve`
+  la comparten las peticiones.
 - **kagent declarativo no aplica guardrails ni políticas.** `render` lo avisa.
   Si un agente los necesita en el clúster, va en `mode: byo`.
 - **Un sub-agente remoto sólo puede ser `mode: tool`.** `transfer` cede el turno

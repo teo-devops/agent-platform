@@ -1,26 +1,39 @@
 # Named model profiles. Agents reference a profile instead of a model id, so
 # migrating the fleet to a new model is a one-line change in this file.
+#
+# `pricing` is what `policies.budget.max_usd` counts with, in dollars per million
+# tokens. Keep it next to the model name: changing one without the other would
+# make the budget lie. Precios públicos de Gemini 2.5 Flash; revísalos al migrar.
+
+x-pricing:
+  gemini-2.5-flash: &gemini-flash-pricing
+    input_per_mtok: 0.30
+    output_per_mtok: 2.50
 
 profiles:
   fast:
     name: gemini-2.5-flash
+    pricing: *gemini-flash-pricing
     temperature: 0.4
     max_output_tokens: 2048
 
   balanced:
     name: gemini-2.5-flash
+    pricing: *gemini-flash-pricing
     temperature: 0.7
     top_p: 0.95
     max_output_tokens: 4096
 
   precise:
     name: gemini-2.5-flash
+    pricing: *gemini-flash-pricing
     temperature: 0.1
     top_p: 0.8
     max_output_tokens: 4096
 
   creative:
     name: gemini-2.5-flash
+    pricing: *gemini-flash-pricing
     temperature: 1.0
     top_p: 0.98
     max_output_tokens: 8192

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-sandbox-local"
+version = "0.1.0"
+description = "Sandbox backend 'local': the code an agent runs, in a locked-down Docker container."
+requires-python = ">=3.10"
+# Only the docker CLI, on PATH: no SDK, so nothing to pin against the daemon.
+dependencies = [
+    "agent-core==0.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+# `spec.sandbox.backend: local` resolves here.
+[project.entry-points."agent_platform.sandboxes"]
+"local" = "agent_sandbox_local:LocalSandbox"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_sandbox_local"]

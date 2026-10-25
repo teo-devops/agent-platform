@@ -36,3 +36,19 @@ def test_only_the_a2a_package_speaks_a2a():
     for module in ("a2a", "httpx"):
         offenders = [p for p in _imports(module) if "platform/a2a" not in p.as_posix()]
         assert not offenders, f"importan {module} fuera de platform/a2a: {offenders}"
+
+
+def test_core_knows_no_sandbox_backend():
+    """El core define qué se aísla; cómo lo hace cada backend vive en platform/sandboxes/."""
+    core = PLATFORM / "core"
+    for backend in ("agent_sandbox_", "docker", "openshell"):
+        offenders = [p for p in _imports(re.escape(backend) + r"\w*") if core in p.parents]
+        assert not offenders, f"agent-core importa {backend}: {offenders}"
+
+
+def test_only_sandbox_backends_shell_out_to_docker():
+    offenders = [
+        p for p in PLATFORM.rglob("*.py")
+        if '"docker"' in p.read_text(encoding="utf-8") and "platform/sandboxes/" not in p.as_posix()
+    ]
+    assert not offenders, f"llaman a docker fuera de platform/sandboxes: {offenders}"
