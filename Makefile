@@ -282,7 +282,8 @@ caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8 caso-10:
 # Langflow llama a los agentes por A2A; no los ejecuta (docs/control-plane.md).
 LANGFLOW_ENV  := .agent-platform/langflow.env
 LANGFLOW_URL  ?= http://127.0.0.1:7860
-LANGFLOW_COMPOSE := docker compose -f deploy/langflow/compose.yaml
+# LANGFLOW_OTEL=1 añade sus trazas hacia MLflow (deploy/langflow/compose.otel.yaml).
+LANGFLOW_COMPOSE := docker compose -f deploy/langflow/compose.yaml $(if $(LANGFLOW_OTEL),-f deploy/langflow/compose.otel.yaml)
 
 $(LANGFLOW_ENV):
 	@mkdir -p .agent-platform
@@ -292,7 +293,14 @@ $(LANGFLOW_ENV):
 	@echo "  credenciales de Langflow generadas en $@ (no se versionan)"
 
 langflow-up: $(LANGFLOW_ENV)
-	$(LANGFLOW_COMPOSE) up -d
+	@if [ -n "$(LANGFLOW_OTEL)" ]; then \
+	  [ "$(MLFLOW_UP)" = yes ] || { echo "LANGFLOW_OTEL necesita MLflow en $(MLFLOW_URL): make mlflow-local"; exit 1; }; \
+	  id=$$(curl -sf "$(MLFLOW_URL)/api/2.0/mlflow/experiments/get-by-name?experiment_name=langflow" | sed -n 's/.*"experiment_id": *"\([0-9]*\)".*/\1/p'); \
+	  [ -n "$$id" ] || id=$$(curl -sf -X POST -H 'Content-Type: application/json' -d '{"name":"langflow"}' \
+	    "$(MLFLOW_URL)/api/2.0/mlflow/experiments/create" | sed -n 's/.*"experiment_id": *"\([0-9]*\)".*/\1/p'); \
+	  echo "  Trazas de Langflow -> MLflow, experimento 'langflow' ($$id)"; \
+	  LANGFLOW_MLFLOW_EXPERIMENT_ID=$$id $(LANGFLOW_COMPOSE) up -d; \
+	else $(LANGFLOW_COMPOSE) up -d; fi
 	@echo "  Esperando a Langflow en $(LANGFLOW_URL)..."
 	@for i in $$(seq 1 90); do curl -sf -o /dev/null $(LANGFLOW_URL)/health && break; sleep 2; done
 	@$(MAKE) --no-print-directory langflow-url

@@ -1,0 +1,16 @@
+# Langflow con sus trazas OpenTelemetry hacia el mismo MLflow que los agentes.
+#
+#   LANGFLOW_OTEL=1 make langflow-up
+#
+# Sólo trazas: el endpoint por señal evita que Langflow mande también logs y
+# métricas a MLflow, que no los acepta. A su propio experimento ("langflow",
+# lo crea `make langflow-up`) y sin spans de base de datos (~50 por ejecución),
+# para no enterrar las trazas de los agentes. Resultado medido en docs/control-plane.md.
+services:
+  langflow:
+    environment:
+      OTEL_SERVICE_NAME: langflow
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://127.0.0.1:5500/v1/traces
+      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_TRACES_HEADERS: x-mlflow-experiment-id=${LANGFLOW_MLFLOW_EXPERIMENT_ID:-0}
+      LANGFLOW_OTEL_DB_SPANS: "false"

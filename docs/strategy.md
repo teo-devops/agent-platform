@@ -136,7 +136,7 @@ desarrollar, no es una frontera contra un atacante decidido.
 | C.1 | Evaluación crítica en 5 ejes ([`control-plane.md`](control-plane.md)) y [ADR 0005](adr/0005-langflow-como-consola.md): Langflow es la consola, no el motor | ✅ |
 | C.2 | `agent-langflow`: `export` de agentes y workflows a flujos de nodos A2A; Langflow 1.12.8 + Postgres en loopback | ✅ verificado (agente, secuencial, paralelo) |
 | C.3 | Deduplicación por `messageId` en `a2a serve` | ✅ |
-| C.4 | Traza única Langflow → agente (`traceparent`) | ⏳ por defecto no se propaga; probar con el OTel de Langflow |
+| C.4 | Traza única Langflow → agente (`traceparent`) | ❌ medido: Langflow no lo propaga ni con OTel activado; se correlaciona por agente y hora (`LANGFLOW_OTEL=1`) |
 | C.5 | Autenticación A2A para sacar Langflow de loopback | ⏳ Fase 1 |
 
 ### Fase 3 — Agentes autónomos
