@@ -29,3 +29,11 @@ spec:
         contains: ["def "]
       judge: [dominio-sin-infraestructura]
       tags: [skill]
+
+    - id: valida-entrada
+      description: Una función que recibe datos del usuario tiene que decir qué hace con los inválidos.
+      input: "Una función que convierta una cadena 'HH:MM' en minutos desde medianoche."
+      expect:
+        contains: ["def ", "->"]
+      judge: [cumple-el-requisito, rechaza-entrada-invalida]
+      tags: [limites]

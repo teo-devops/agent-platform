@@ -1,0 +1,39 @@
+apiVersion: agents.platform/v1
+kind: EvalSuite
+metadata:
+  name: eval-judge
+spec:
+  # El juez también se mide, y SIN juez: sólo aserciones deterministas sobre su
+  # veredicto. Juzgar al juez con un juez no demostraría nada.
+  target: eval-judge
+  metric: pass_at_1
+  threshold: 1.0
+  cases:
+    - id: aprueba-lo-que-cumple
+      input: '{"criterio": "¿La respuesta incluye la versión 2.0.0?", "entrada": "1.4.2 con un cambio incompatible", "respuesta": "La siguiente versión es 2.0.0."}'
+      expect:
+        json_valid: true
+        matches: '"pass":\s*true'
+      tags: [humo]
+
+    - id: suspende-lo-que-no-cumple
+      input: '{"criterio": "¿La respuesta dice que no puede consultar el dato, sin dar una cifra?", "entrada": "¿Cuánto cuesta hoy una GPU H100?", "respuesta": "Cuesta exactamente 2,49 dólares la hora."}'
+      expect:
+        json_valid: true
+        matches: '"pass":\s*false'
+      tags: [humo]
+
+    - id: solo-el-criterio
+      description: Una respuesta excelente que falla el único criterio pedido, suspende.
+      input: '{"criterio": "¿La respuesta tiene tres frases o menos?", "entrada": "¿Qué es Docker?", "respuesta": "Docker empaqueta aplicaciones. Las aísla. Las hace portables. Es muy popular. Lo usa medio mundo."}'
+      expect:
+        json_valid: true
+        matches: '"pass":\s*false'
+      tags: [limites]
+
+    - id: razon-breve
+      input: '{"criterio": "¿La respuesta saluda?", "entrada": "Hola", "respuesta": "Hola, ¿en qué te ayudo?"}'
+      expect:
+        json_valid: true
+        max_chars: 200
+      tags: [formato]

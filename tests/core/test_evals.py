@@ -148,3 +148,26 @@ async def test_a_case_that_blows_up_is_a_failure_not_a_crash():
     resultado = await run_suite(suite, criteria, run=revienta, judge=None)
     assert resultado.score == 0.0
     assert all("RuntimeError" in (c.error or "") for c in resultado.cases)
+
+
+def test_every_agent_of_the_catalogue_has_a_suite(store):
+    """Un agente sin evals es un agente que nadie sabe si funciona."""
+    sin_suite = sorted(set(store.list_agents()) - set(store.eval_suites()))
+    assert not sin_suite, f"agentes sin carpeta evals/: {sin_suite}"
+
+
+@pytest.mark.parametrize("name", SUITES)
+def test_a_threshold_does_not_demand_perfection_by_accident(name):
+    """Con 3 casos, un umbral de 0.75 exige 3/3: un solo fallo transitorio tumba la suite.
+
+    Si una suite de verdad no tolera ningún fallo (el juez), que lo diga con 1.0.
+    """
+    from agent_core.evals import load_suite
+
+    suite, _ = load_suite(_suite_dir(name))
+    casos, umbral = len(suite.spec.cases), suite.spec.threshold
+    if umbral < 1.0 and casos > 1:
+        assert (casos - 1) / casos >= umbral, (
+            f"'{name}': con {casos} casos, el umbral {umbral} no tolera ningún fallo. "
+            f"Bájalo a {(casos - 1) / casos:.2f}, añade casos, o declara 1.0 si es a propósito"
+        )

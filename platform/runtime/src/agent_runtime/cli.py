@@ -375,6 +375,8 @@ def _report(result: Any, runtime: str, *, judged: bool) -> bool:
             print(f"        {case.error}")
         for failure in case.failures:
             print(f"        {failure}")
+        # Sin ver la respuesta, un fallo no se puede diagnosticar: ¿mal la suite o mal el agente?
+        print(f"        respuesta: {_preview(case.output) or '(vacía)'}")
 
     total = len(result.cases)
     passed = sum(1 for case in result.cases if case.passed)
@@ -387,6 +389,11 @@ def _report(result: Any, runtime: str, *, judged: bool) -> bool:
         f"-> {'OK' if ok else 'POR DEBAJO'}"
     )
     return ok
+
+
+def _preview(text: str, limit: int = 160) -> str:
+    flat = " ".join(str(text).split())
+    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
 
 def cmd_ui(args: argparse.Namespace) -> int:

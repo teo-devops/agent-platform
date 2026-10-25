@@ -13,3 +13,8 @@ criteria:
     question: >-
       ¿La lógica de negocio depende de un puerto o interfaz (Protocol/ABC) en
       lugar de importar o instanciar el driver de base de datos directamente?
+
+  rechaza-entrada-invalida:
+    question: >-
+      ¿El código trata explícitamente las entradas inválidas (formato roto,
+      horas o minutos fuera de rango) con un error claro y documentado?

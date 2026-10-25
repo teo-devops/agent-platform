@@ -1,0 +1,17 @@
+criteria:
+  entrega-codigo-y-revision:
+    question: >-
+      ¿La respuesta presenta, con encabezados, el código final Y un resumen de la
+      revisión, en ese orden?
+    weight: 2.0
+
+  revision-con-hallazgos:
+    question: >-
+      ¿El resumen de la revisión menciona al menos un hallazgo o comprobación
+      concreta (un caso límite, un dato del análisis estático), en vez de un
+      genérico "el código está bien"?
+
+  se-mantiene-en-su-papel:
+    question: >-
+      ¿La respuesta dice que su función es coordinar desarrollo de software, sin
+      opinar sobre el tema que le preguntan?

@@ -19,3 +19,10 @@ criteria:
       ¿La revisión reconoce que el código es correcto, sin presentar como
       problemas de severidad alta o media cosas que no lo son?
     weight: 2.0
+
+  eval-es-grave:
+    question: >-
+      ¿La revisión clasifica el uso de `eval` sobre una entrada del usuario como
+      un riesgo de seguridad de severidad alta y propone una alternativa (por
+      ejemplo `ast.literal_eval` o un parser propio)?
+    weight: 2.0

@@ -383,7 +383,9 @@ en otro runtime.
 - `budget.max_usd` cuenta con `model.pricing`. Un modelo sin precio no corta por
   dólares; por eso todo perfil de `configs/models.yaml` lo lleva.
 - **Un reintento sólo ocurre si no se ha emitido nada**, y nunca tras un
-  guardrail o un permiso. En A2A, sólo si la petición no llegó (conexión
+  guardrail o un permiso. Una respuesta vacía (Gemini la da a veces tras una ronda
+  de tools) cuenta como fallo y se reintenta. Los perfiles `relaxed` y `frugal`
+  reintentan 2 y 1 veces; `standard`, 1. En A2A, sólo si la petición no llegó (conexión
   rechazada, 502/503/504): `message/send` no es idempotente. Tras tres fallos
   seguidos a una URL, el delegado falla rápido 30 s (`AGENT_A2A_BREAKER_*`).
 - **Un agente con `spec.sandbox` no puede ir como declarativo en kagent**, y el

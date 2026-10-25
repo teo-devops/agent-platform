@@ -86,6 +86,17 @@ Confundirlas sale caro en las dos direcciones: pedir clave en cada commit hace
 que alguien acabe saltándose el gate, y fiarlo todo a `--check` es no medir
 nada.
 
+## El umbral y el número de casos
+
+Con 3 casos, `threshold: 0.75` exige 3/3: un solo 503 del proveedor o una
+respuesta rara tumba la suite, y una puerta que se pone roja por azar acaba
+ignorada. El umbral tiene que dejar margen para **un** fallo —4 casos y 0.75, o 3
+casos y 0.66— salvo que no tolerar ninguno sea la intención, y entonces se
+declara `1.0` (como el juez). `tests/core/test_evals.py` lo comprueba.
+
+Antes de culpar al agente, mira la respuesta: `agentctl eval` la imprime bajo cada
+caso que falla. La mitad de las veces el que está mal es el caso.
+
 ## Qué casos escribir
 
 Los cuatro que de verdad pagan, por orden:

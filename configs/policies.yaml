@@ -6,6 +6,9 @@ profiles:
     max_tool_calls: 40
     max_llm_calls: 30
     timeout_seconds: 300
+    # Un 503 del proveedor no es un fallo del agente: se reintenta, siempre que
+    # no haya salido nada todavía (agent_core/execution.py).
+    retry_attempts: 2
     budget:
       max_tokens: 200000
 
@@ -21,5 +24,6 @@ profiles:
     max_tool_calls: 4
     max_llm_calls: 4
     timeout_seconds: 60
+    retry_attempts: 1
     budget:
       max_tokens: 15000

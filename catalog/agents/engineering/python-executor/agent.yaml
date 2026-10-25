@@ -2,7 +2,7 @@ apiVersion: agents.platform/v1
 kind: Agent
 metadata:
   name: python-executor
-  version: 0.1.0
+  version: 0.2.0
   description: Escribe código Python y lo EJECUTA en un sandbox aislado, con sus tests, antes de responder.
   owner: dev-tools-team
   tags: [demo, coding, sandbox]

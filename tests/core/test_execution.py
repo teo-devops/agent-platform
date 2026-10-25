@@ -103,6 +103,32 @@ async def test_nothing_is_retried_once_part_of_the_answer_is_out():
     assert calls["n"] == 1
 
 
+@pytest.mark.asyncio
+async def test_an_empty_answer_is_retried():
+    calls = {"n": 0}
+
+    def start():
+        async def stream():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                yield "  "  # sólo espacios: no es una respuesta
+                return
+            yield "ahora sí"
+
+        return stream()
+
+    chunks = await _collect(guarded_stream(start, retry_attempts=1, backoff=0))
+    assert chunks[-1] == "ahora sí"
+    assert calls["n"] == 2
+
+
+@pytest.mark.asyncio
+async def test_without_retries_an_empty_answer_is_returned_as_is():
+    start, calls = _flaky(0, chunks=())
+    assert await _collect(guarded_stream(start, retry_attempts=0)) == []
+    assert calls["n"] == 1
+
+
 def test_cost_is_dollars_per_million_tokens():
     pricing = ModelPricing(input_per_mtok=0.30, output_per_mtok=2.50)
     assert cost_usd(pricing, 1_000_000, 0) == pytest.approx(0.30)

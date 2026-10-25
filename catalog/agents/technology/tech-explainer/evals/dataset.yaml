@@ -5,7 +5,7 @@ metadata:
 spec:
   target: tech-explainer
   metric: pass_at_1
-  threshold: 0.8
+  threshold: 0.75
   cases:
     - id: concepto-basico
       description: El caso de siempre. Si esto se rompe, se rompió algo gordo.

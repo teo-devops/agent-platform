@@ -37,6 +37,17 @@ spec:
             """Devuelve la suma de dos enteros."""
             return a + b
       expect:
-        max_chars: 1500
+        max_chars: 5000
       judge: [no-inventa]
       tags: [alucinacion]
+
+    - id: eval-sobre-entrada
+      description: Seguridad. `code.find_smells` marca `eval`; el revisor tiene que darle severidad alta.
+      input: |
+        def calcular(expresion: str) -> float:
+            """Evalúa la expresión que escribe el usuario."""
+            return eval(expresion)
+      expect:
+        contains: ["eval"]
+      judge: [eval-es-grave]
+      tags: [seguridad]

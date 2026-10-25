@@ -360,20 +360,21 @@ catalog/agents/engineering/release-manager/
     └── judges.yaml
 ```
 
-| Dominio | Agente | Para qué lo usarías | Tools | Caso | Evals |
-|---|---|---|---|---|---|
-| technology | `tech-explainer` | Explicar un concepto técnico a negocio en tres frases | — | 1, 5 | ✅ |
-| technology | `tech-researcher` | Preparar notas para decidir sobre una tecnología: alternativas, riesgos, preguntas | — | 4, 5 | |
-| media | `tech-writer` | Convertir esas notas en un artículo del blog de ingeniería | `text.*` | 4 | |
-| engineering | `release-manager` | De los commits a la siguiente versión semver y sus notas de release | `release.*`, `time.now` | 2 | ✅ |
-| engineering | `software-manager` | Coordinar desarrollo y revisión de un requisito | delega | 3, 7, 9 | |
-| engineering | `python-developer` | Escribir una función tipada y documentada | `code.check_syntax` | 3, 6, 7 | ✅ |
-| engineering | `code-reviewer` | Revisar código con análisis estático real | `code.*` | 3, 6, 7 | ✅ |
-| engineering | `python-executor` | Escribir código **y ejecutarlo** con sus tests en un sandbox | `sandbox.*` | 10 | |
-| dataspace | `data-provider` · `data-consumer` | Dos organizaciones: una ofrece datos, la otra comprueba si su política permite el uso | `dataspace.*` · delega | 8 | |
-| platform | `eval-judge` | Interno: el juez de las evals. No es una demo | — | — | |
+| Dominio | Agente | Para qué lo usarías | Tools | Caso |
+|---|---|---|---|---|
+| technology | `tech-explainer` | Explicar un concepto técnico a negocio en tres frases | — | 1, 5 |
+| technology | `tech-researcher` | Preparar notas para decidir sobre una tecnología: alternativas, riesgos, preguntas | — | 4, 5 |
+| media | `tech-writer` | Convertir esas notas en un artículo del blog de ingeniería | `text.*` | 4 |
+| engineering | `release-manager` | De los commits a la siguiente versión semver y sus notas de release | `release.*`, `time.now` | 2 |
+| engineering | `software-manager` | Coordinar desarrollo y revisión de un requisito | delega | 3, 7, 9 |
+| engineering | `python-developer` | Escribir una función tipada y documentada | `code.check_syntax` | 3, 6, 7 |
+| engineering | `code-reviewer` | Revisar código con análisis estático real | `code.*` | 3, 6, 7 |
+| engineering | `python-executor` | Escribir código **y ejecutarlo** con sus tests en un sandbox | `sandbox.*` | 10 |
+| dataspace | `data-provider` · `data-consumer` | Dos organizaciones: una ofrece datos, la otra comprueba si su política permite el uso | `dataspace.*` · delega | 8 |
+| platform | `eval-judge` | Interno: el juez de las evals. No es una demo | — | — |
 
-Y tres workflows que componen esos mismos agentes: `tech-article` (investigar →
+Todos tienen su suite en `evals/` (`make eval` la valida; un test impide añadir
+un agente sin ella). Y tres workflows que componen esos mismos agentes: `tech-article` (investigar →
 redactar), `tech-briefing` (una tecnología, dos audiencias en paralelo) y
 `review-loop` (desarrollador ↔ revisor). Un agente no sabe si corre suelto o
 como paso de un flujo.
