@@ -1,0 +1,149 @@
+# Cada servicio y cada UI de la plataforma, en UN sitio.
+#
+# De aquí salen `make status` (qué está levantado ahora mismo, y cómo levantar
+# lo que no), `make down` (parar todo lo local) y la tabla de UIs del README
+# (`make docs`; un test comprueba que está al día y que cada `start`/`stop` es un
+# target que existe).
+#
+#   lane      local | cluster | gitops  (gitops: sólo con make gitops-lab)
+#   url       lo que se abre en el navegador
+#   health    lo que se sondea (por defecto, url). Cualquier respuesta HTTP < 500 cuenta
+#   start     cómo se levanta (targets de make, separados por " · ")
+#   stop      cómo se para (si no, Ctrl+C en su terminal)
+#   pid       los `make` que lo levantan en primer plano guardan su pid con este
+#             nombre en .agent-platform/pids/; `make down` lo usa para pararlo
+#   match     texto que debe aparecer en la línea de comandos de ese pid (por si se reutilizó)
+#   a2a       en vez de una URL, los agentes de ese entorno (configs/environments/)
+#   ready     recurso de kagent cuyo estado Ready se cuenta (namespace/recurso)
+#   deployment  namespace/deployment: si está desplegado pero no responde, se dice
+#   expose    cómo hacerlo accesible en ese caso (por defecto, start)
+#   credentials usuario / clave, o de dónde salen
+#   links     sub-páginas que merece la pena abrir directamente
+
+lanes:
+  local: Local — sin clúster
+  cluster: Clúster — kind-agent-lab
+  gitops: Clúster, sólo con make gitops-lab
+
+services:
+  # -- local ------------------------------------------------------------------
+  - name: ADK Dev UI
+    lane: local
+    url: http://localhost:8000/dev-ui/
+    health: http://localhost:8000/
+    start: make dev-adk
+    pid: adk
+    match: agentctl
+    purpose: "Playground de ADK, 100 % local: todo el catálogo en el desplegable, con guardrails y permisos activos"
+
+  - name: LangGraph Studio
+    lane: local
+    url: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+    health: http://127.0.0.1:2024/ok
+    start: make dev-langgraph · make dev-langchain
+    pid: langgraph
+    match: agentctl
+    purpose: "El grafo de cada agente; la UI se sirve desde smith.langchain.com. Studio sirve LangGraph y LangChain: uno cada vez"
+    links:
+      - { name: API de LangGraph, url: "http://127.0.0.1:2024/docs", purpose: "La misma API, sin la UI remota" }
+
+  - name: MCP (catalog-tools)
+    lane: local
+    url: http://localhost:8001/
+    start: make mcp
+    pid: mcp
+    match: agentctl
+    purpose: "Qué publica el servidor. El endpoint del protocolo es /mcp: para clientes MCP (IDE, Inspector), no para el navegador"
+
+  - name: MCP Inspector
+    lane: local
+    url: http://localhost:6274
+    start: make mcp-inspector
+    pid: mcp-inspector
+    match: inspector
+    purpose: "UI oficial de MCP, sobre make mcp: lista las tools y las llama a mano. Ábrelo con la URL con token que imprime"
+
+  - name: Agentes A2A
+    lane: local
+    a2a: local-a2a
+    start: make a2a-up · make a2a-catalog
+    stop: make a2a-down
+    pid: a2a
+    match: agentctl
+    purpose: "Un proceso por agente, en el puerto que dice configs/environments/local-a2a.yaml. make a2a-cards los sondea"
+
+  - name: Langflow
+    lane: local
+    url: http://127.0.0.1:7860
+    health: http://127.0.0.1:7860/health
+    start: make langflow-up
+    stop: make langflow-down
+    credentials: "admin / la clave de make langflow-url"
+    purpose: "La consola: flujos generados del catálogo con agentctl langflow export, que llaman a los agentes por A2A (make a2a-catalog)"
+
+  - name: MLflow
+    lane: local
+    url: http://localhost:5500
+    health: http://localhost:5500/health
+    start: make mlflow-local · make lab
+    stop: make mlflow-down
+    pid: mlflow
+    match: mlflow
+    purpose: "Backend de AgentOps. El mismo puerto en los dos carriles: el del clúster o, sin clúster, make mlflow-local"
+    links:
+      - { name: Trazas, url: "http://localhost:5500/#/experiments/0/traces", purpose: "Una traza por pregunta, con agent.* y prompt.*" }
+      - { name: Versiones de agente, url: "http://localhost:5500/#/experiments/0/models", purpose: "Un LoggedModel por nombre@versión" }
+      - { name: Prompts, url: "http://localhost:5500/#/prompts", purpose: "Prompt Registry: una versión por texto distinto" }
+      - { name: "Runs (evals, métricas)", url: "http://localhost:5500/#/experiments/0/runs", purpose: "make eval-run, make metrics" }
+
+  # -- clúster ----------------------------------------------------------------
+  - name: kagent
+    lane: cluster
+    url: http://localhost:8082
+    start: make lab
+    ready: kagent/agents.kagent.dev
+    deployment: kagent/kagent-ui
+    expose: make platform  (aplica el NodePort de deploy/kagent/ui-nodeport.yaml)
+    purpose: "Chatear con los agentes desplegados"
+    links:
+      - { name: chat de software-manager, url: "http://localhost:8082/agents/kagent/software-manager/chat", purpose: "El jefe de desarrollo: orquesta a los otros dos por A2A (make caso-9)" }
+      - { name: chat de code-reviewer, url: "http://localhost:8082/agents/kagent/code-reviewer/chat", purpose: "Revisor declarativo: tools code.* por MCP + skill" }
+      - { name: chat de python-developer, url: "http://localhost:8082/agents/kagent/python-developer/chat", purpose: "Desarrollador BYO (LangGraph dentro de kagent)" }
+
+  - name: A2A de kagent
+    lane: cluster
+    url: http://localhost:8083/api/a2a/kagent/software-manager/
+    health: http://localhost:8083/api/a2a/kagent/software-manager/.well-known/agent-card.json
+    start: make kagent-a2a
+    deployment: kagent/kagent-controller
+    purpose: "El controlador atiende A2A para todos los agentes del clúster (port-forward)"
+
+  - name: SeaweedFS
+    lane: cluster
+    url: http://localhost:9901
+    start: make lab
+    credentials: seaweedadmin / seaweedadmin
+    purpose: "Artefactos de MLflow"
+
+  - name: Registro de imágenes
+    lane: cluster
+    url: http://localhost:5001/v2/_catalog
+    start: make cluster-up
+    purpose: "Las imágenes de agent-host, mcp, mlflow y las skills (make images)"
+
+  # -- sólo con ArgoCD ----------------------------------------------------------
+  - name: ArgoCD
+    lane: gitops
+    url: https://localhost:8443
+    start: make argocd
+    deployment: argocd/argocd-server
+    credentials: "admin / la clave que imprime make argocd"
+    purpose: "Qué sincroniza ArgoCD de deploy/gitops/overlays/lab (port-forward)"
+
+  - name: Grafana
+    lane: gitops
+    url: http://localhost:3000
+    start: make grafana
+    deployment: monitoring/monitoring-grafana
+    credentials: "admin / la clave que imprime make grafana"
+    purpose: "Salud del clúster y de los pods (Prometheus). Las trazas de los agentes siguen en MLflow"

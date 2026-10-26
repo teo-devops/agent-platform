@@ -24,11 +24,12 @@ cd agent-platform
 make install
 cp .env.example .env            # GOOGLE_API_KEY=...  (también la lee el clúster)
 make lab                        # kind + registro + MLflow + SeaweedFS + collector + kagent + agentes (~10 min)
-make status                     # los tres agentes Ready; catalog-tools ACCEPTED True
+make status                     # kagent con 3/3 agentes Ready; MLflow y SeaweedFS ✓
+make cluster-status             # el detalle según kubectl: catalog-tools ACCEPTED True
 ```
 
 Deja abiertas en pestañas las UIs de la tabla del
-[README](../README.md#las-uis) (`make ui-urls` las imprime): kagent, MLflow
+[README](../README.md#las-uis) (`make ui-urls` las imprime, con lo que ya responde): kagent, MLflow
 (trazas, versiones, prompts) y, para el Paso 0, la del playground de turno.
 
 Haz **una pasada completa** del guion. Así quedan trazas de ensayo que sirven de
@@ -291,7 +292,7 @@ Preguntas que suelen salir:
 |---|---|
 | Gemini (cuota, red) | Enseña las trazas del ensayo en MLflow; el Paso 1 se puede contar con `make render` y `discoveredTools`, que no llaman al modelo |
 | LangGraph Studio no carga (UI en smith.langchain.com) | `langgraph dev --no-browser` y enseña la API en http://127.0.0.1:2024/docs; o salta a ADK |
-| Un pod no arranca | `make status`; `kubectl -n kagent describe agent <nombre>`; `make deploy` es idempotente |
+| Un pod no arranca | `make status` y `make cluster-status`; `kubectl -n kagent describe agent <nombre>`; `make deploy` es idempotente |
 | `discoveredTools` no refleja las tools nuevas | `make refresh-tools` |
 | La traza no tiene `agent.*` | `make metrics` (sincroniza primero); `kubectl -n observability logs deploy/otel-collector` |
 | El clúster no está (Paso 2) | A2A sin kagent: `make a2a-up` en una terminal y `make caso-7` en otra. Mismos tres agentes, cada uno en su framework, delegación por A2A narrada en las dos terminales |

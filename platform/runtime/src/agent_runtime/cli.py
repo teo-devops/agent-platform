@@ -61,6 +61,140 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_catalog(args: argparse.Namespace) -> int:
+    """The catalogue by domain: what each agent is for, what it uses, how to try it."""
+    import shutil
+    import textwrap
+
+    from .cases import cases_by_agent, load_cases
+
+    factory = _factory(args)
+    store = factory.store
+    cases = load_cases(store.root)
+    involved = cases_by_agent(factory, cases)
+    asked = {}
+    for case in cases:
+        asked.setdefault(case.agent, case)
+
+    width = min(shutil.get_terminal_size((100, 20)).columns, 110)
+    indent = " " * 25
+
+    def entry(name: str, version: str, description: str, details: list[str]) -> None:
+        body = textwrap.wrap(description or "-", width=max(width - 33, 30))
+        print(f"  {name:<22} {version:<7} {body[0]}")
+        for line in [*body[1:]]:
+            print(f"{indent}        {line}")
+        for detail in details:
+            print(f"{indent}{detail}")
+
+    def how_to_try(name: str) -> str:
+        if name in asked:
+            return f"pruébalo: make caso-{asked[name].id}"
+        return f"pruébalo: make run AGENT={name} MSG='...'"
+
+    def in_cases(name: str) -> str:
+        found = involved.get(name)
+        return f"casos {' '.join(map(str, found))} · " if found else ""
+
+    agents = store.list_agents()
+    workflows = store.list_workflows()
+    print(f"Catálogo · {len(agents)} agentes · {len(workflows)} workflows · entorno {store.environment}")
+
+    by_domain: dict[str, list[str]] = {}
+    for name in agents:
+        by_domain.setdefault(store.domain_of(name) or "-", []).append(name)
+
+    for domain in sorted(by_domain):
+        print(f"\n{domain}")
+        for name in by_domain[domain]:
+            manifest = store.load(name)
+            spec = manifest.spec
+            uses = []
+            if spec.enabled_tools:
+                uses.append("tools " + ", ".join(t.ref for t in spec.enabled_tools))
+            if spec.sandbox.enabled:
+                uses.append(f"sandbox {spec.sandbox.profile or spec.sandbox.backend}")
+            if spec.enabled_skills:
+                uses.append("skills " + ", ".join(s.ref for s in spec.enabled_skills))
+            if spec.enabled_sub_agents:
+                uses.append("delega en " + ", ".join(s.ref for s in spec.enabled_sub_agents))
+            details = [" · ".join(uses)] if uses else []
+            details.append(in_cases(name) + how_to_try(name))
+            entry(name, manifest.metadata.version, manifest.metadata.description, details)
+
+    if workflows:
+        print("\nworkflows")
+        for name in workflows:
+            manifest = store.load(name)
+            steps = " → ".join(f"{n.name} ({n.agent})" for n in manifest.spec.nodes)
+            details = [f"{manifest.spec.type}: {steps}", in_cases(name) + how_to_try(name)]
+            entry(name, manifest.metadata.version, manifest.metadata.description, details)
+
+    print("\nDetalle de uno: agentctl show <nombre>   ·   los casos: make casos")
+    return 0
+
+
+def cmd_case(args: argparse.Namespace) -> int:
+    """Run one use case of ``catalog/cases.yaml``, or list them all.
+
+    What `make caso-N` calls. It prints the plain ``agentctl`` command first,
+    so whoever runs a case learns the command that does the work.
+    """
+    from .cases import find_case, load_cases
+    from .context import find_root
+
+    root = Path(args.root).resolve() if args.root else find_root()
+    cases = load_cases(root)
+
+    if args.id is None:
+        print("\nCasos de uso — cada uno añade una forma de colaborar al anterior")
+        for case in cases:
+            print(f"  make caso-{case.id:<3} {case.agent:<18} {case.summary}")
+        print(
+            '\n  Opciones: MSG="..." (tu mensaje)  RUNTIME=adk|langgraph|langchain (otro framework)'
+            "  ENV=<entorno> (p. ej. sandbox-sbx en el caso 10)"
+            "\n  Sin make: agentctl case <N> [-m '...']\n"
+        )
+        return 0
+
+    case = find_case(cases, args.id)
+    if args.requires:
+        print(" ".join(case.requires))
+        return 0
+
+    message = args.message or case.message
+    print(f"\n  Caso {case.id} · {case.summary}")
+
+    if case.remote:
+        print(f"  $ agentctl a2a send {case.remote} -m '{message}'\n")
+        factory = _factory(args)
+        try:
+            delegate = factory.registries.transports.get("a2a")(name=case.agent, url=case.remote)
+        except Exception:
+            print("error: el caso habla por A2A y no hay transporte A2A instalado (platform/a2a)", file=sys.stderr)
+            return 2
+        try:
+            print(delegate(message))
+        except PlatformError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+    else:
+        args.env = args.env or case.env
+        flags = "".join(
+            f"--{flag} {value} " for flag, value in (("runtime", args.runtime), ("env", args.env)) if value
+        )
+        print(f"  $ agentctl {flags}run {case.agent} -v -m '{message}'\n")
+        code = cmd_run(argparse.Namespace(**{**vars(args), "name": case.agent, "message": message, "verbose": True}))
+        if code:
+            return code
+
+    if case.ui:
+        print(f"\n  Míralo también: {case.ui}")
+    if case.tip:
+        print(f"  Prueba también: {case.tip}")
+    return 0
+
+
 def cmd_show(args: argparse.Namespace) -> int:
     factory = _factory(args)
     manifest = factory.store.load(args.name)
@@ -419,6 +553,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("list", help="List the agents and workflows defined in this repository").set_defaults(func=cmd_list)
+
+    sub.add_parser(
+        "catalog", help="The catalogue by domain: what each agent is for, what it uses, how to try it"
+    ).set_defaults(func=cmd_catalog)
+
+    case = sub.add_parser("case", help="Run a use case of catalog/cases.yaml (no number: list them)")
+    case.add_argument("id", nargs="?", type=int, help="The case number, as in `make caso-N`")
+    case.add_argument("-m", "--message", help="Your message instead of the case's example")
+    case.add_argument("--requires", action="store_true", help="Print the make targets the case needs first")
+    case.set_defaults(func=cmd_case)
 
     show = sub.add_parser("show", help="Print the fully resolved configuration of one agent or workflow")
     show.add_argument("name")

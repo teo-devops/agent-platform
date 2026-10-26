@@ -451,3 +451,51 @@ def test_a_task_that_fails_while_polled_is_an_error(scripted):
     scripted(_task("working"), _task("failed", "sin cuota"))
     with pytest.raises(PlatformError, match="ended the task as failed: sin cuota"):
         _delegate("http://poll-failed/")("hola")
+
+
+# -- puertos de `a2a serve` -----------------------------------------------------
+
+
+def test_serve_listens_where_the_environment_says_whatever_the_order():
+    from agent_a2a.cli import endpoints, serve_ports
+
+    declared = endpoints(ROOT, "local-a2a")
+    assert serve_ports(["data-provider", "python-developer"], declared, None) == [9103, 9101]
+
+
+def test_serve_refuses_an_agent_without_a_declared_port():
+    from agent_a2a.cli import endpoints, serve_ports
+
+    with pytest.raises(ConfigError, match="local-a2a.yaml"):
+        serve_ports(["eval-judge"], endpoints(ROOT, "local-a2a"), None)
+
+
+def test_an_explicit_port_means_consecutive_ports():
+    from agent_a2a.cli import serve_ports
+
+    assert serve_ports(["a", "b", "c"], {}, 9201) == [9201, 9202, 9203]
+
+
+def test_every_local_a2a_agent_has_its_own_port():
+    from urllib.parse import urlparse
+
+    ports = [urlparse(u).port for u in ConfigStore(ROOT, environment="local-a2a").remote_agents.values()]
+    assert None not in ports and len(ports) == len(set(ports))
+
+
+def test_ping_reports_who_does_not_answer(monkeypatch, capsys):
+    from agent_a2a.client import A2AError
+
+    def card(url, timeout):
+        if "9101" in url:
+            return {"description": "desarrollador"}
+        raise A2AError("no")
+
+    monkeypatch.setattr("agent_a2a.client.fetch_card", card)
+    monkeypatch.setenv("AGENT_PLATFORM_ROOT", str(ROOT))
+    from agent_runtime.cli import main
+
+    assert main(["a2a", "ping", "python-developer:langgraph", "code-reviewer:langchain", "--missing"]) == 1
+    assert capsys.readouterr().out.split() == ["code-reviewer:langchain"]
+    assert main(["a2a", "ping", "python-developer"]) == 0
+    assert "✓ python-developer" in capsys.readouterr().out

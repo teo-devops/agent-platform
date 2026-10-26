@@ -6,6 +6,10 @@
 #   make a2a-up                              # terminal 1: sirve los dos sub-agentes
 #   make a2a-run MSG="..."                   # terminal 2: el jefe, delegando por A2A
 #
+# Estas URLs son también los puertos: `agentctl a2a serve` escucha cada agente en
+# el de la suya, y `agentctl a2a ping` (make a2a-cards) las sondea. Para servir
+# otro agente por A2A basta con añadirlo aquí.
+#
 # Sin este fichero, lo mismo con una variable (gana sobre el fichero):
 #   AGENT_A2A_ENDPOINTS="python-developer=http://127.0.0.1:9101/,code-reviewer=http://127.0.0.1:9102/"
 
