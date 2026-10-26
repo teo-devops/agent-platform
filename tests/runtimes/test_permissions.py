@@ -9,30 +9,30 @@ from agent_runtime_adk.tools import build_tools
 
 
 def test_deny_beats_allow():
-    rules = AllowDeny(allow=["health.*"], deny=["health.get_*"])
-    assert rules.permits("health.calculate_bmi")
-    assert not rules.permits("health.get_advice")
+    rules = AllowDeny(allow=["release.*"], deny=["release.next_*"])
+    assert rules.permits("release.parse_commits")
+    assert not rules.permits("release.next_version")
     assert not rules.permits("text.word_count")
 
 
 def test_denied_tools_are_never_attached_to_the_agent(registries):
-    permissions = PermissionSpec(tools=AllowDeny(allow=["health.calculate_bmi"]))
+    permissions = PermissionSpec(tools=AllowDeny(allow=["release.parse_commits"]))
     resolved = build_tools(
-        [ToolRef(ref="health.calculate_bmi"), ToolRef(ref="health.get_advice")],
+        [ToolRef(ref="release.parse_commits"), ToolRef(ref="release.next_version")],
         registries.tools,
         permissions,
         agent="test",
     )
-    assert [tool.name for tool in resolved.tools] == ["calculate_bmi"]
-    assert resolved.denied == ["health.get_advice"]
+    assert [tool.name for tool in resolved.tools] == ["parse_commits"]
+    assert resolved.denied == ["release.next_version"]
 
 
 def test_alias_renames_the_tool_the_model_sees(registries):
     resolved = build_tools(
-        [ToolRef(ref="health.calculate_bmi", alias="bmi")], registries.tools, PermissionSpec(), agent="test"
+        [ToolRef(ref="release.next_version", alias="bump")], registries.tools, PermissionSpec(), agent="test"
     )
-    assert resolved.tools[0].name == "bmi"
-    assert resolved.aliases == {"bmi": "health.calculate_bmi"}
+    assert resolved.tools[0].name == "bump"
+    assert resolved.aliases == {"bump": "release.next_version"}
 
 
 class _Tool:
@@ -47,10 +47,10 @@ class _Context:
 
 @pytest.mark.asyncio
 async def test_plugin_rejects_a_tool_outside_the_granted_permissions():
-    plugin = ToolPermissionPlugin(allow=["health.*"], aliases={"calculate_bmi": "health.calculate_bmi"},
+    plugin = ToolPermissionPlugin(allow=["release.*"], aliases={"next_version": "release.next_version"},
                                   agent="agent_under_test")
     allowed = await plugin.before_tool_callback(
-        tool=_Tool("calculate_bmi"), tool_args={}, tool_context=_Context()
+        tool=_Tool("next_version"), tool_args={}, tool_context=_Context()
     )
     assert allowed is None
 

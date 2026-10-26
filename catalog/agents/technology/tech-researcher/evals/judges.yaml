@@ -1,0 +1,18 @@
+criteria:
+  util-para-decidir:
+    question: >-
+      ¿Podría alguien que tiene que decidir si adopta esta tecnología usar estas
+      notas tal cual, porque nombran alternativas concretas y riesgos concretos
+      en vez de generalidades?
+
+  no-afirma-cifras-sin-marcar:
+    question: >-
+      ¿Toda cifra, porcentaje o fecha de la respuesta aparece marcada como "a
+      verificar" o similar, sin presentarse como un dato seguro?
+    weight: 2.0
+
+  compara-con-criterio:
+    question: >-
+      ¿La respuesta compara las dos opciones según criterios explícitos (por
+      ejemplo rendimiento, tipado, tooling, compatibilidad con navegadores) y
+      dice en qué caso conviene cada una?

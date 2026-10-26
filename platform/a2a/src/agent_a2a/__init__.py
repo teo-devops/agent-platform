@@ -16,7 +16,7 @@ and the same few lines reach an agent served here or one behind kagent's
 controller.
 """
 
-from .client import A2ADelegate, fetch_card, send
+from .client import A2ADelegate, CircuitOpenError, fetch_card, send
 from .version import __version__
 
-__all__ = ["A2ADelegate", "__version__", "fetch_card", "send"]
+__all__ = ["A2ADelegate", "CircuitOpenError", "__version__", "fetch_card", "send"]

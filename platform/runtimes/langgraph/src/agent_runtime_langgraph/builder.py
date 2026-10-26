@@ -48,6 +48,7 @@ class AgentBuilder:
             guardrails=spec.guardrails,
             policies=spec.policies,
             permissions=spec.permissions,
+            pricing=spec.model.pricing,
         )
 
         resolved = build_tools(
@@ -63,6 +64,16 @@ class AgentBuilder:
             tools.append(
                 StructuredTool.from_function(
                     func=funcion, name=ref.replace(".", "_"), description=funcion.__doc__
+                )
+            )
+
+        # Sandbox: sus tools van ligadas a su propio sandbox y pasan por permisos.
+        for ref, funcion in factory.sandbox_tools(manifest).items():
+            tools.append(
+                StructuredTool.from_function(
+                    func=enforcement.guard_tool(funcion, ref),
+                    name=funcion.__name__,
+                    description=funcion.__doc__,
                 )
             )
         plugins: list[Any] = []

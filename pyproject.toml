@@ -9,6 +9,7 @@ members = [
     "platform/mcp",
     "platform/kagent",
     "platform/integrations/*",
+    "platform/sandboxes/*",
 ]
 
 [tool.pytest.ini_options]

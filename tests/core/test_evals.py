@@ -12,18 +12,25 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SUITES = sorted(p.parent.name for p in ROOT.glob("evals/*/dataset.yaml"))
+SUITES = sorted(p.parents[1].name for p in ROOT.glob("catalog/agents/*/*/evals/dataset.yaml"))
+
+
+def _suite_dir(name: str) -> Path:
+    from agent_core.config import ConfigStore
+
+    return ConfigStore(ROOT).eval_suites()[name]
 
 
 @pytest.mark.parametrize("name", SUITES)
 def test_every_suite_loads_and_targets_something_real(store, name):
     from agent_core.evals import load_suite
 
-    suite, criteria = load_suite(ROOT / "evals" / name)
+    suite, criteria = load_suite(_suite_dir(name))
     conocidos = [*store.list_agents(), *store.list_workflows()]
     assert suite.spec.target in conocidos, (
         f"la suite '{name}' evalúa '{suite.spec.target}', que no existe"
     )
+    assert suite.spec.target == name, "la suite de un agente le evalúa a él, no a otro"
     assert suite.spec.cases, "una suite sin casos no mide nada"
 
     ids = [case.id for case in suite.spec.cases]
@@ -35,7 +42,7 @@ def test_cases_actually_assert_something(name):
     """Un caso sin aserciones ni juez pasa siempre. Verde y sin medir nada."""
     from agent_core.evals import load_suite
 
-    suite, _ = load_suite(ROOT / "evals" / name)
+    suite, _ = load_suite(_suite_dir(name))
     for case in suite.spec.cases:
         assert not (case.expect.is_empty and not case.judge), (
             f"el caso '{name}/{case.id}' no comprueba nada: pasaría siempre"
@@ -52,7 +59,7 @@ def test_unknown_judge_criteria_are_rejected(tmp_path):
         "kind: EvalSuite\n"
         "metadata: {name: x}\n"
         "spec:\n"
-        "  target: greeting\n"
+        "  target: tech-explainer\n"
         "  cases:\n"
         "    - id: uno\n"
         "      input: hola\n"
@@ -66,8 +73,8 @@ def test_unknown_judge_criteria_are_rejected(tmp_path):
 @pytest.mark.parametrize(
     "output, expect, esperados",
     [
-        ("El IMC es 24.2", {"contains": ["24.2"]}, 0),
-        ("El IMC es 25.0", {"contains": ["24.2"]}, 1),
+        ("La siguiente es 1.5.0", {"contains": ["1.5.0"]}, 0),
+        ("La siguiente es 2.0.0", {"contains": ["1.5.0"]}, 1),
         ("todo bien", {"not_contains": ["mal"]}, 0),
         ("está mal", {"not_contains": ["mal"]}, 1),
         ("x" * 50, {"max_chars": 10}, 1),
@@ -88,18 +95,19 @@ def test_deterministic_assertions(output, expect, esperados):
 async def test_the_score_is_the_fraction_that_passes():
     from agent_core.evals import load_suite, run_suite
 
-    suite, criteria = load_suite(ROOT / "evals" / "health-advisor")
+    suite, criteria = load_suite(_suite_dir("release-manager"))
+    correctas = {"1.4.2\nfeat": "## 1.5.0", "1.4.2\nrefactor": "## 2.0.0", "0.3.1": "## 0.4.0"}
 
     async def siempre_correcto(entrada: str) -> str:
-        # Satisface los `contains` de las dos primeras y evita los `not_contains`.
-        return "Tu IMC es 24.2 y también 14.7, en rango saludable."
+        # La versión que toca para cada caso, y nada que lo contradiga.
+        return next((v for clave, v in correctas.items() if clave in entrada), "versión no válida")
 
     resultado = await run_suite(suite, criteria, run=siempre_correcto, judge=None)
     assert resultado.score == 1.0
     assert resultado.meets_threshold
 
     async def siempre_mal(entrada: str) -> str:
-        return "inf"
+        return "1.0.1"
 
     peor = await run_suite(suite, criteria, run=siempre_mal, judge=None)
     assert peor.score < suite.spec.threshold
@@ -115,7 +123,7 @@ async def test_a_judge_that_cannot_be_read_fails_the_case():
     """
     from agent_core.evals import load_suite, run_suite
 
-    suite, criteria = load_suite(ROOT / "evals" / "greeting")
+    suite, criteria = load_suite(_suite_dir("tech-explainer"))
 
     async def responde(entrada: str) -> str:
         return "Hola, qué tal."
@@ -132,7 +140,7 @@ async def test_a_judge_that_cannot_be_read_fails_the_case():
 async def test_a_case_that_blows_up_is_a_failure_not_a_crash():
     from agent_core.evals import load_suite, run_suite
 
-    suite, criteria = load_suite(ROOT / "evals" / "greeting")
+    suite, criteria = load_suite(_suite_dir("tech-explainer"))
 
     async def revienta(entrada: str) -> str:
         raise RuntimeError("el proveedor se ha caído")
@@ -140,3 +148,26 @@ async def test_a_case_that_blows_up_is_a_failure_not_a_crash():
     resultado = await run_suite(suite, criteria, run=revienta, judge=None)
     assert resultado.score == 0.0
     assert all("RuntimeError" in (c.error or "") for c in resultado.cases)
+
+
+def test_every_agent_of_the_catalogue_has_a_suite(store):
+    """Un agente sin evals es un agente que nadie sabe si funciona."""
+    sin_suite = sorted(set(store.list_agents()) - set(store.eval_suites()))
+    assert not sin_suite, f"agentes sin carpeta evals/: {sin_suite}"
+
+
+@pytest.mark.parametrize("name", SUITES)
+def test_a_threshold_does_not_demand_perfection_by_accident(name):
+    """Con 3 casos, un umbral de 0.75 exige 3/3: un solo fallo transitorio tumba la suite.
+
+    Si una suite de verdad no tolera ningún fallo (el juez), que lo diga con 1.0.
+    """
+    from agent_core.evals import load_suite
+
+    suite, _ = load_suite(_suite_dir(name))
+    casos, umbral = len(suite.spec.cases), suite.spec.threshold
+    if umbral < 1.0 and casos > 1:
+        assert (casos - 1) / casos >= umbral, (
+            f"'{name}': con {casos} casos, el umbral {umbral} no tolera ningún fallo. "
+            f"Bájalo a {(casos - 1) / casos:.2f}, añade casos, o declara 1.0 si es a propósito"
+        )

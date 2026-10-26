@@ -2,7 +2,7 @@ apiVersion: agents.platform/v1
 kind: Agent
 metadata:
   name: data-consumer
-  version: 0.1.0
+  version: 0.2.0
   description: Organización B. Busca datos en la organización A y comprueba si su política permite el uso que se pide.
   owner: org-b
   tags: [demo, a2a, dataspace]

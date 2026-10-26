@@ -1,6 +1,6 @@
 """Component registries with entry-point discovery.
 
-A registry maps a stable *reference* (``"health.calculate_bmi"``) to a Python
+A registry maps a stable *reference* (``"code.metrics"``) to a Python
 object. References are what configuration files use, so a config never imports
 Python: it names a component and the platform resolves it.
 
@@ -44,6 +44,10 @@ EVAL_SINKS_GROUP = "agent_platform.eval_sinks"
 #: process (``a2a``). Each entry is ``factory(name=..., url=...)`` and returns a
 #: delegate: callable with the request text, plus an async ``acall``.
 TRANSPORTS_GROUP = "agent_platform.transports"
+#: Entry-point group for sandbox backends (``local``, ``openshell``...). Each
+#: entry is a class or object with ``name`` and ``open(spec, agent=...)``; see
+#: :mod:`agent_core.sandbox`.
+SANDBOXES_GROUP = "agent_platform.sandboxes"
 
 
 @dataclass(frozen=True)
@@ -168,7 +172,7 @@ class Registry(Generic[T]):
         return sorted({*self._items, *self._pending})
 
     def match(self, pattern: str) -> list[str]:
-        """References matching a glob pattern such as ``"health.*"``."""
+        """References matching a glob pattern such as ``"code.*"``."""
         return [ref for ref in self.keys() if fnmatch.fnmatch(ref, pattern)]
 
     def __contains__(self, ref: object) -> bool:
@@ -193,6 +197,7 @@ class Registries:
     builders: Registry[Any] = field(default_factory=lambda: Registry("builders", BUILDERS_GROUP))
     runtimes: Registry[Any] = field(default_factory=lambda: Registry("runtimes", RUNTIMES_GROUP))
     transports: Registry[Any] = field(default_factory=lambda: Registry("transports", TRANSPORTS_GROUP))
+    sandboxes: Registry[Any] = field(default_factory=lambda: Registry("sandboxes", SANDBOXES_GROUP))
 
     @classmethod
     def default(cls) -> "Registries":

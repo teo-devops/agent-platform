@@ -1,0 +1,26 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: python-executor
+  version: 0.2.0
+  description: Escribe código Python y lo EJECUTA en un sandbox aislado, con sus tests, antes de responder.
+  owner: dev-tools-team
+  tags: [demo, coding, sandbox]
+spec:
+  model:
+    profile: precise
+  prompt:
+    file: prompt.md
+  tools:
+    - ref: code.check_syntax
+  # Lo que el agente ejecuta corre aquí: sin red, raíz de sólo lectura,
+  # /workspace en memoria. Ver configs/sandboxes.yaml.
+  sandbox:
+    profile: code-exec
+  permissions:
+    tools:
+      allow: ["code.check_syntax", "sandbox.*"]
+  policies:
+    max_tool_calls: 10
+    timeout_seconds: 180
+  output_key: tested_code

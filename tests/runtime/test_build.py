@@ -17,9 +17,9 @@ def test_every_manifest_builds(factory):
 
 
 def test_tools_declared_in_configuration_reach_the_agent(factory):
-    agent = factory.build_agent("health-advisor")
-    assert agent.name == "health_advisor"
-    assert sorted(tool.name for tool in agent.tools) == ["calculate_bmi", "get_advice"]
+    agent = factory.build_agent("release-manager")
+    assert agent.name == "release_manager"
+    assert sorted(tool.name for tool in agent.tools) == ["next_version", "now", "parse_commits"]
     assert agent.model == "gemini-2.5-flash"
     assert agent.generate_content_config.temperature == 0.1
 
@@ -40,8 +40,8 @@ def test_an_app_carries_the_plugins_of_the_whole_tree(factory):
 
 
 def test_workflows_compose_existing_agents(factory):
-    result = factory.build("research-and-write")
-    assert result.agent.name == "research_and_write"
+    result = factory.build("tech-article")
+    assert result.agent.name == "tech_article"
     # steps are renamed to the node names, and their plugin scopes follow
     scopes = {plugin.agent for plugin in result.plugins if getattr(plugin, "agent", None)}
     assert {"research", "write"} <= scopes

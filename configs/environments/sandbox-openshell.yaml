@@ -1,0 +1,21 @@
+# Como `local`, pero los agentes con sandbox se aíslan con NVIDIA OpenShell:
+# Landlock + seccomp y una política aplicada fuera del proceso del agente.
+#
+# El perfil (configs/sandboxes.yaml) sigue diciendo QUÉ se aísla; este fichero
+# sólo dice CON QUIÉN. Ningún manifiesto cambia:
+#
+#   agentctl --env sandbox-openshell run python-executor -v -m "..."
+#   AGENT_SANDBOX_BACKEND=openshell agentctl run python-executor ...   # lo mismo, por variable
+
+agentDefaults:
+  model:
+    profile: fast
+  policies:
+    profile: relaxed
+
+workflowDefaults:
+  policies:
+    profile: relaxed
+
+sandbox:
+  backend: openshell

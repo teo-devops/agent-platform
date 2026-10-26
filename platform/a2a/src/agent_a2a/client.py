@@ -7,11 +7,25 @@ package with messages, and :func:`answer_text` reads both.
 Each call opens an ``a2a.send`` span and injects ``traceparent`` into the
 request, so a trace that crosses the wire is still one trace — in MLflow, and in
 ``agentctl run -v``.
+
+Two things keep a coordinator standing when a sub-agent is not:
+
+- **Retries, only where they are safe.** ``message/send`` is not idempotent: a
+  request that reached the agent may already be running. So a call is retried
+  only when it never got there — the connection was refused — or a gateway in
+  between said so (502/503/504). A read timeout is not retried.
+- **A circuit breaker per URL.** After a few failures in a row the delegate
+  fails fast for a while instead of making every coordinator wait out the same
+  dead agent. The error says so, and the coordinator reports it like any other
+  tool error.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
+import threading
+import time
 import uuid
 from contextlib import contextmanager
 from typing import Any, Iterator
@@ -22,11 +36,68 @@ from agent_core.errors import PlatformError
 
 #: Delegating to an agent means waiting for a model, maybe several: be patient.
 DEFAULT_TIMEOUT = float(os.getenv("AGENT_A2A_TIMEOUT", "300"))
+#: Extra attempts for a call that never reached the agent.
+DEFAULT_RETRIES = int(os.getenv("AGENT_A2A_RETRIES", "2"))
+#: Seconds before the first retry; doubles on each attempt.
+RETRY_BACKOFF = float(os.getenv("AGENT_A2A_BACKOFF", "0.5"))
+#: Failures in a row that open the circuit of a URL.
+BREAKER_THRESHOLD = int(os.getenv("AGENT_A2A_BREAKER_THRESHOLD", "3"))
+#: Seconds an open circuit fails fast before letting one call through.
+BREAKER_COOLDOWN = float(os.getenv("AGENT_A2A_BREAKER_COOLDOWN", "30"))
 CARD_PATH = "/.well-known/agent-card.json"
+
+#: Statuses with which a proxy says the request did not reach the agent.
+_RETRYABLE_STATUS = {502, 503, 504}
 
 
 class A2AError(PlatformError):
     """The remote agent could not be reached, or answered with an error."""
+
+
+class CircuitOpenError(A2AError):
+    """The remote agent failed too often recently; the call was not attempted."""
+
+
+class CircuitBreaker:
+    """Counts failures in a row for one URL and fails fast while they pile up."""
+
+    def __init__(self, *, threshold: int = BREAKER_THRESHOLD, cooldown: float = BREAKER_COOLDOWN) -> None:
+        self.threshold = threshold
+        self.cooldown = cooldown
+        self.failures = 0
+        self.opened_at: float | None = None
+        self._lock = threading.Lock()
+
+    def check(self, name: str, url: str) -> None:
+        with self._lock:
+            if self.opened_at is None:
+                return
+            waited = time.monotonic() - self.opened_at
+            if waited < self.cooldown:
+                raise CircuitOpenError(
+                    f"'{name}' at {url} failed {self.failures} times in a row; not calling it "
+                    f"for another {self.cooldown - waited:.0f}s"
+                )
+            self.opened_at = None  # half-open: let this one through
+
+    def record(self, ok: bool) -> None:
+        with self._lock:
+            if ok:
+                self.failures, self.opened_at = 0, None
+                return
+            self.failures += 1
+            if self.threshold and self.failures >= self.threshold:
+                self.opened_at = time.monotonic()
+
+
+_BREAKERS: dict[str, CircuitBreaker] = {}
+_BREAKERS_LOCK = threading.Lock()
+
+
+def breaker_for(url: str) -> CircuitBreaker:
+    """The breaker shared by every delegate that calls ``url`` in this process."""
+    with _BREAKERS_LOCK:
+        return _BREAKERS.setdefault(url, CircuitBreaker())
 
 
 class A2ADelegate:
@@ -36,28 +107,82 @@ class A2ADelegate:
     async code; both return the agent's answer as text.
     """
 
-    def __init__(self, *, name: str, url: str, timeout: float = DEFAULT_TIMEOUT) -> None:
+    def __init__(
+        self,
+        *,
+        name: str,
+        url: str,
+        timeout: float = DEFAULT_TIMEOUT,
+        retries: int = DEFAULT_RETRIES,
+        backoff: float = RETRY_BACKOFF,
+    ) -> None:
         self.name = name
         self.url = url
         self.timeout = timeout
+        self.retries = retries
+        self.backoff = backoff
+        self.breaker = breaker_for(url)
 
     def __call__(self, request: str) -> str:
+        self.breaker.check(self.name, self.url)
         with _span(self.name, self.url) as span:
-            try:
-                with httpx.Client(timeout=self.timeout) as client:
-                    response = client.post(self.url, json=_payload(request), headers=_headers())
-            except httpx.HTTPError as exc:
-                raise _unreachable(self.name, self.url, exc) from exc
-            return _read(response, self.name, self.url, span)
+            payload = _payload(request)
+            with httpx.Client(timeout=self.timeout) as client:
+                for attempt in range(self.retries + 1):
+                    try:
+                        response = client.post(self.url, json=payload, headers=_headers())
+                    except httpx.HTTPError as exc:
+                        if self._retry(attempt, exc, span):
+                            time.sleep(self._wait(attempt))
+                            continue
+                        raise self._fail(_unreachable(self.name, self.url, exc)) from exc
+                    if response.status_code in _RETRYABLE_STATUS and attempt < self.retries:
+                        _note_retry(span, attempt)
+                        time.sleep(self._wait(attempt))
+                        continue
+                    return self._answer(response, span)
+        raise AssertionError("unreachable")  # pragma: no cover
 
     async def acall(self, request: str) -> str:
+        self.breaker.check(self.name, self.url)
         with _span(self.name, self.url) as span:
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.post(self.url, json=_payload(request), headers=_headers())
-            except httpx.HTTPError as exc:
-                raise _unreachable(self.name, self.url, exc) from exc
-            return _read(response, self.name, self.url, span)
+            payload = _payload(request)
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                for attempt in range(self.retries + 1):
+                    try:
+                        response = await client.post(self.url, json=payload, headers=_headers())
+                    except httpx.HTTPError as exc:
+                        if self._retry(attempt, exc, span):
+                            await asyncio.sleep(self._wait(attempt))
+                            continue
+                        raise self._fail(_unreachable(self.name, self.url, exc)) from exc
+                    if response.status_code in _RETRYABLE_STATUS and attempt < self.retries:
+                        _note_retry(span, attempt)
+                        await asyncio.sleep(self._wait(attempt))
+                        continue
+                    return self._answer(response, span)
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    # -- internals -----------------------------------------------------------
+
+    def _retry(self, attempt: int, exc: Exception, span: Any) -> bool:
+        """Only a request that never reached the agent is safe to send again."""
+        if attempt >= self.retries or not isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+            return False
+        _note_retry(span, attempt)
+        return True
+
+    def _wait(self, attempt: int) -> float:
+        return self.backoff * 2 ** attempt
+
+    def _answer(self, response: httpx.Response, span: Any) -> str:
+        # An agent that answers with an error is up; one that answers 5xx is not.
+        self.breaker.record(ok=response.status_code < 500)
+        return _read(response, self.name, self.url, span)
+
+    def _fail(self, error: A2AError) -> A2AError:
+        self.breaker.record(ok=False)
+        return error
 
     def __repr__(self) -> str:
         return f"A2ADelegate({self.name!r}, {self.url!r})"
@@ -152,6 +277,11 @@ def _unreachable(name: str, url: str, exc: Exception) -> A2AError:
         f"could not reach '{name}' at {url} ({type(exc).__name__}: {exc}). "
         f"Is it being served? `agentctl a2a serve {name}` or `make a2a-up`."
     )
+
+
+def _note_retry(span: Any, attempt: int) -> None:
+    if span is not None:
+        span.set_attribute("a2a.retries", attempt + 1)
 
 
 def _parts_text(parts: list[dict[str, Any]]) -> str:

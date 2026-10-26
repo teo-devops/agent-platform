@@ -20,7 +20,7 @@ workflowDefaults:
 
 # Per-agent overrides win over everything above.
 agents:
-  health-advisor:
+  release-manager:
     model:
       profile: precise
     policies:

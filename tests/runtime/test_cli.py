@@ -15,15 +15,15 @@ def _root_env(root, monkeypatch):
 def test_list_prints_agents_and_workflows(capsys):
     assert main(["list"]) == 0
     output = capsys.readouterr().out
-    assert "health-advisor" in output
-    assert "research-and-write" in output
+    assert "release-manager" in output
+    assert "tech-article" in output
 
 
 def test_show_prints_the_resolved_configuration(capsys):
-    assert main(["show", "health-advisor"]) == 0
+    assert main(["show", "release-manager"]) == 0
     output = capsys.readouterr().out
     assert "gemini-2.5-flash" in output
-    assert "health.calculate_bmi" in output
+    assert "release.next_version" in output
 
 
 def test_validate_reports_every_manifest(capsys):
@@ -34,7 +34,7 @@ def test_validate_reports_every_manifest(capsys):
 def test_components_lists_installed_extensions(capsys):
     assert main(["components"]) == 0
     output = capsys.readouterr().out
-    assert "health.calculate_bmi" in output
+    assert "release.next_version" in output
     assert "workflow" in output
 
 

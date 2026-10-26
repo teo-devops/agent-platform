@@ -32,6 +32,13 @@ def test_the_local_a2a_environment_places_the_specialists_elsewhere():
         "python-developer": "http://127.0.0.1:9101/",
         "code-reviewer": "http://127.0.0.1:9102/",
         "data-provider": "http://127.0.0.1:9103/",
+        # El resto del catálogo, para Langflow. No son sub-agentes de nadie: sólo
+        # dicen dónde llamarlos, no cambian cómo se construye ningún coordinador.
+        "tech-researcher": "http://127.0.0.1:9104/",
+        "tech-writer": "http://127.0.0.1:9105/",
+        "tech-explainer": "http://127.0.0.1:9106/",
+        "release-manager": "http://127.0.0.1:9107/",
+        "software-manager": "http://127.0.0.1:9108/",
     }
 
 
@@ -222,3 +229,135 @@ def test_participants_names_agents_and_delegates(factory):
     agents, delegates = factory.participants("software-manager")
     assert agents["software_manager"] == "software-manager"
     assert delegates == {"python_developer": "python-developer", "code_reviewer": "code-reviewer"}
+
+
+# -- resiliencia ---------------------------------------------------------------
+
+
+def _answering(*responses):
+    """Un transporte httpx que responde en orden: un status, o una excepción."""
+    import httpx
+
+    sent = []
+    queue = list(responses)
+
+    def handler(request):
+        sent.append(request)
+        step = queue.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        if step == 200:
+            body = {"jsonrpc": "2.0", "id": "1",
+                    "result": {"kind": "message", "parts": [{"kind": "text", "text": "hecho"}]}}
+            return httpx.Response(200, json=body)
+        return httpx.Response(step, text="gateway")
+
+    return httpx.MockTransport(handler), sent
+
+
+@pytest.fixture
+def transport(monkeypatch):
+    """Instala un transporte falso en los clientes httpx que abre el delegado."""
+    import functools
+
+    import httpx
+
+    def install(*responses):
+        mock, sent = _answering(*responses)
+        monkeypatch.setattr(httpx, "Client", functools.partial(httpx.Client, transport=mock))
+        return sent
+
+    return install
+
+
+def _delegate(url, **kwargs):
+    from agent_a2a import A2ADelegate
+    from agent_a2a.client import _BREAKERS
+
+    _BREAKERS.pop(url, None)
+    return A2ADelegate(name="dev", url=url, backoff=0, **kwargs)
+
+
+def test_a_refused_connection_is_retried(transport):
+    import httpx
+
+    sent = transport(httpx.ConnectError("refused"), 200)
+    assert _delegate("http://retry-connect/")("hola") == "hecho"
+    assert len(sent) == 2
+
+
+def test_a_gateway_error_is_retried(transport):
+    sent = transport(503, 200)
+    assert _delegate("http://retry-503/")("hola") == "hecho"
+    assert len(sent) == 2
+
+
+def test_a_read_timeout_is_not_retried_the_agent_may_be_working(transport):
+    import httpx
+    from agent_core.errors import PlatformError
+
+    sent = transport(httpx.ReadTimeout("slow"), 200)
+    with pytest.raises(PlatformError, match="could not reach"):
+        _delegate("http://no-retry-read/")("hola")
+    assert len(sent) == 1
+
+
+def test_the_circuit_opens_after_failures_in_a_row(transport):
+    import httpx
+    from agent_a2a import CircuitOpenError
+    from agent_core.errors import PlatformError
+
+    sent = transport(*[httpx.ConnectError("down")] * 3)
+    delegate = _delegate("http://breaker/", retries=0)
+    for _ in range(3):
+        with pytest.raises(PlatformError, match="could not reach"):
+            delegate("hola")
+    with pytest.raises(CircuitOpenError, match="3 times in a row"):
+        delegate("hola")
+    assert len(sent) == 3  # la cuarta ni se intentó
+
+
+# -- idempotencia --------------------------------------------------------------
+
+
+def test_a_repeated_message_id_runs_the_agent_once(store):
+    """Un reintento con el mismo messageId recibe la misma respuesta sin volver a ejecutar."""
+    from agent_a2a.client import _payload, answer_text
+    from agent_a2a.server import build_app
+    from starlette.testclient import TestClient
+
+    runs = []
+
+    class _CountingRuntime(_EchoRuntime):
+        async def stream(self, app, message):
+            runs.append(message)
+            yield f"respuesta {len(runs)}"
+
+    factory = _Factory(store)
+    factory.runtime = lambda name: _CountingRuntime()
+    with TestClient(build_app(factory, "python-developer", url="http://test/", log=io.StringIO())) as client:
+        payload = _payload("una mediana")
+        first = answer_text(client.post("/", json=payload).json()["result"])
+        again = answer_text(client.post("/", json=payload).json()["result"])
+        other = answer_text(client.post("/", json=_payload("una mediana")).json()["result"])
+
+    assert first == again == "respuesta 1"
+    assert other == "respuesta 2", "otro messageId es otra petición"
+    assert len(runs) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_failure_is_not_remembered():
+    from agent_a2a.server import Deduplicator
+
+    seen, attempts = Deduplicator(), []
+
+    async def flaky():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("503")
+        return "bien"
+
+    with pytest.raises(RuntimeError):
+        await seen.run("m-1", flaky)
+    assert await seen.run("m-1", flaky) == ("bien", False)

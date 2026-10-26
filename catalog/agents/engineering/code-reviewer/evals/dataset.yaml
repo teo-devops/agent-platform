@@ -1,0 +1,53 @@
+apiVersion: agents.platform/v1
+kind: EvalSuite
+metadata:
+  name: code-reviewer
+spec:
+  target: code-reviewer
+  metric: pass_at_1
+  threshold: 0.75
+  cases:
+    - id: except-desnudo
+      description: El análisis estático lo detecta; el revisor tiene que citarlo, no intuirlo.
+      input: |
+        def leer(path):
+            try:
+                return open(path).read()
+            except:
+                return None
+      expect:
+        contains: ["except"]
+      judge: [cita-el-analisis, da-solucion]
+      tags: [humo]
+
+    - id: default-mutable
+      input: |
+        def anadir(item, lista=[]):
+            lista.append(item)
+            return lista
+      expect:
+        contains: ["lista"]
+      judge: [detecta-default-mutable]
+      tags: [humo]
+
+    - id: codigo-correcto
+      description: Un revisor que inventa problemas es tan malo como uno que no ve los reales.
+      input: |
+        def suma(a: int, b: int) -> int:
+            """Devuelve la suma de dos enteros."""
+            return a + b
+      expect:
+        max_chars: 5000
+      judge: [no-inventa]
+      tags: [alucinacion]
+
+    - id: eval-sobre-entrada
+      description: Seguridad. `code.find_smells` marca `eval`; el revisor tiene que darle severidad alta.
+      input: |
+        def calcular(expresion: str) -> float:
+            """Evalúa la expresión que escribe el usuario."""
+            return eval(expresion)
+      expect:
+        contains: ["eval"]
+      judge: [eval-es-grave]
+      tags: [seguridad]

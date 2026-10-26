@@ -1,0 +1,58 @@
+# Named sandbox profiles: where the code an agent runs is executed, and what it
+# may reach from there. An agent without `spec.sandbox` has no sandbox, and the
+# `sandbox.*` tools are refused when it is built.
+#
+# The profile says WHAT is isolated. WHO isolates is a decision of the
+# environment (`sandbox.backend` in configs/environments/<env>.yaml, or
+# AGENT_SANDBOX_BACKEND), so the same profile runs on any of them:
+#   local      a locked-down Docker container on this machine (development)
+#   sbx        Docker Sandboxes: a microVM with its own kernel per sandbox
+#   openshell  NVIDIA OpenShell: Landlock + seccomp, policy enforced out of process
+# The `backend:` below is only the default when the environment says nothing.
+#
+# Network egress is deny-by-default everywhere: an agent reaches only what is listed.
+
+profiles:
+  # Run snippets of Python: no network, no model, a scratch directory.
+  code-exec:
+    backend: local
+    image: agent-platform/sandbox:0.1.0   # make sandbox-image
+    filesystem:
+      read: ["/workspace"]
+      write: ["/workspace"]
+    network:
+      egress:
+        default: deny
+        allow: []
+    process:
+      allow_exec: true
+      max_procs: 32
+    inference:
+      route: none
+    resources:
+      cpu: "1"
+      memory: 512Mi
+      command_timeout_seconds: 30
+      ttl_seconds: 900
+
+  # A development workspace: may install packages and read public repositories.
+  dev-workspace:
+    backend: local
+    image: agent-platform/sandbox:0.1.0   # make sandbox-image
+    filesystem:
+      read: ["/workspace"]
+      write: ["/workspace"]
+    network:
+      egress:
+        default: deny
+        allow: ["pypi.org", "files.pythonhosted.org", "github.com", "*.githubusercontent.com"]
+    process:
+      allow_exec: true
+      max_procs: 64
+    inference:
+      route: none
+    resources:
+      cpu: "2"
+      memory: 2Gi
+      command_timeout_seconds: 300
+      ttl_seconds: 3600

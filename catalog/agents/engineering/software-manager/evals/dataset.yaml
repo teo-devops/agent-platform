@@ -1,0 +1,36 @@
+apiVersion: agents.platform/v1
+kind: EvalSuite
+metadata:
+  name: software-manager
+spec:
+  target: software-manager
+  metric: pass_at_1
+  threshold: 0.66
+  cases:
+    - id: requisito-completo
+      description: >-
+        El recorrido entero: delega, pasa la revisión y presenta. Es caro (varias
+        llamadas al modelo), por eso la suite es corta.
+      input: "Una función que valide un IBAN español"
+      expect:
+        contains: ["def "]
+      judge: [entrega-codigo-y-revision]
+      tags: [humo]
+
+    - id: no-escribe-codigo-el
+      description: >-
+        El coordinador no tiene tools de código: lo que entrega debe venir de sus
+        especialistas, y el resumen de revisión debe citar hallazgos concretos.
+      input: "Una función que calcule el factorial de un entero no negativo"
+      expect:
+        contains: ["def "]
+      judge: [revision-con-hallazgos]
+      tags: [delegacion]
+
+    - id: fuera-de-alcance
+      description: Una petición que no es de código no debería acabar en una función.
+      input: "¿Qué opinas del último partido del Barça?"
+      expect:
+        not_contains: ["def "]
+      judge: [se-mantiene-en-su-papel]
+      tags: [limites]

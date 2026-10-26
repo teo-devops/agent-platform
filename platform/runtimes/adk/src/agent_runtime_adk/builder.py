@@ -55,6 +55,12 @@ class AgentBuilder:
         for ref, funcion in skills.as_tools().items():
             tools.append(FunctionTool(func=funcion))
         aliases = dict(resolved_tools.aliases)
+
+        # Sandbox: sus tools van ligadas a su propio sandbox y pasan por permisos.
+        for ref, funcion in factory.sandbox_tools(manifest).items():
+            tool = FunctionTool(func=funcion)
+            tools.append(tool)
+            aliases[tool.name] = ref
         agent_aliases: dict[str, str] = {}
         sub_agents: list[Any] = []
         plugins: list[Any] = []
@@ -112,6 +118,7 @@ class AgentBuilder:
             agent_aliases=agent_aliases,
             audit=factory.audit,
             attributes=agent_attributes(manifest, "adk"),
+            pricing=spec.model.pricing,
         ) + plugins
 
         log_event(

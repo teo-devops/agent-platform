@@ -101,9 +101,9 @@ def test_author_written_needs_are_respected(store):
     body = WorkflowBody(
         type="sequential",
         nodes=[
-            {"name": "a", "agent": "researcher"},
-            {"name": "b", "agent": "writer"},
-            {"name": "c", "agent": "greeting", "needs": ["a"]},
+            {"name": "a", "agent": "tech-researcher"},
+            {"name": "b", "agent": "tech-writer"},
+            {"name": "c", "agent": "tech-explainer", "needs": ["a"]},
         ],
     )
     assert dependencies(body) == {"a": [], "b": [], "c": ["a"]}

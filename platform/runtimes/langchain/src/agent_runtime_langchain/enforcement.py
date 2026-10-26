@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from agent_core.errors import GuardrailViolation, PermissionDeniedError
+from agent_core.execution import check_budget
 from agent_core.guardrails import evaluate
 from agent_core.schemas import GuardrailsSpec, PermissionSpec, PolicySpec
 from agent_core.telemetry import get_logger, log_event
@@ -30,6 +31,7 @@ def build_middleware(
     policies: PolicySpec,
     permissions: PermissionSpec,
     aliases: dict[str, str],
+    pricing: Any = None,
 ) -> Any:
     """Build the middleware that enforces what a manifest declared."""
     from langchain.agents.middleware import AgentMiddleware
@@ -41,7 +43,7 @@ def build_middleware(
 
         def before_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:
             messages = _messages(state)
-            _check_ceilings(agent, policies, messages)
+            _check_ceilings(agent, policies, messages, pricing)
 
             if not guardrails.input or not messages:
                 return None
@@ -93,7 +95,7 @@ def build_middleware(
     return EnforcementMiddleware()
 
 
-def _check_ceilings(agent: str, policies: PolicySpec, messages: list[Any]) -> None:
+def _check_ceilings(agent: str, policies: PolicySpec, messages: list[Any], pricing: Any = None) -> None:
     """Read the ceilings off the conversation: correct per run, no counter to reset."""
     llm_calls = sum(1 for m in messages if getattr(m, "type", "") == "ai")
     tool_calls = sum(1 for m in messages if getattr(m, "type", "") == "tool")
@@ -106,6 +108,17 @@ def _check_ceilings(agent: str, policies: PolicySpec, messages: list[Any]) -> No
         raise PermissionDeniedError(
             f"agent '{agent}' reached its ceiling of {policies.max_tool_calls} tool calls"
         )
+    check_budget(agent, policies.budget, pricing, *_token_usage(messages))
+
+
+def _token_usage(messages: list[Any]) -> tuple[int, int]:
+    """Input and output tokens spent so far, from each answer's ``usage_metadata``."""
+    spent_in = spent_out = 0
+    for message in messages:
+        usage = getattr(message, "usage_metadata", None) or {}
+        spent_in += int(usage.get("input_tokens") or 0)
+        spent_out += int(usage.get("output_tokens") or 0)
+    return spent_in, spent_out
 
 
 def _messages(state: Any) -> list[Any]:

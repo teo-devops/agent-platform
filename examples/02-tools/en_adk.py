@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import re
+
 import asyncio
 
 from google.adk.agents import LlmAgent
@@ -14,54 +16,62 @@ from google.adk.tools import FunctionTool
 from google.genai import types
 
 
-def calculate_bmi(weight_kg: float, height_m: float) -> dict:
-    """Calculates the Body Mass Index (BMI) from weight and height.
+def next_version(current: str, log: str) -> dict:
+    """Computes the next semantic version from the current one and a commit log.
+
+    A breaking change ("type!:" or "BREAKING CHANGE") bumps the major version, a
+    feature ("feat:") the minor one, and anything else the patch.
 
     Args:
-        weight_kg: Body weight in kilograms.
-        height_m: Height in metres.
+        current: The version released last, e.g. "1.4.2".
+        log: Commit subjects since that release, one per line (Conventional Commits).
 
     Returns:
-        A dict with the bmi value rounded to one decimal.
+        A dict with the 'next' version and the 'bump' applied, or an 'error'.
     """
     # Este docstring no es decoración: es lo que lee el modelo para decidir si
-    # llama a la función y qué le pasa. ADK lo convierte en el esquema JSON.
-    if height_m <= 0:
-        return {"error": "height must be greater than zero"}
-    return {"bmi": round(weight_kg / (height_m**2), 1)}
+    # llama a la función y qué le pasa. El framework lo convierte en el esquema JSON.
+    try:
+        major, minor, patch = (int(n) for n in current.strip().lstrip("v").split("."))
+    except ValueError:
+        return {"error": f"'{current}' is not a semantic version like 1.4.2"}
+    lines = [line.strip() for line in log.splitlines() if line.strip()]
+    if any(re.match(r"^[a-z]+(\(.+\))?!:", line) or line.startswith("BREAKING CHANGE") for line in lines):
+        return {"next": f"{major + 1}.0.0", "bump": "major"}
+    if any(re.match(r"^feat(\(.+\))?:", line) for line in lines):
+        return {"next": f"{major}.{minor + 1}.0", "bump": "minor"}
+    return {"next": f"{major}.{minor}.{patch + 1}", "bump": "patch"}
 
 
-def get_advice(bmi: float) -> dict:
-    """Explains what a BMI value means.
+def parse_commits(log: str) -> dict:
+    """Groups a commit log, one Conventional Commits subject per line, by type.
 
     Args:
-        bmi: The Body Mass Index value.
+        log: Commit subjects separated by newlines, e.g. "fix(api): handle timeouts".
 
     Returns:
-        A dict with the category the value falls into.
+        A dict with the subjects grouped under 'features', 'fixes' and 'other'.
     """
-    if bmi < 18.5:
-        categoria = "underweight"
-    elif bmi < 25:
-        categoria = "healthy range"
-    elif bmi < 30:
-        categoria = "overweight"
-    else:
-        categoria = "obese"
-    return {"category": categoria}
-
+    groups: dict[str, list[str]] = {"features": [], "fixes": [], "other": []}
+    for line in (line.strip() for line in log.splitlines()):
+        match = re.match(r"^([a-z]+)(\(.+\))?!?:\s*(.+)$", line)
+        if match:
+            key = {"feat": "features", "fix": "fixes"}.get(match[1], "other")
+            groups[key].append(match[3])
+    return groups
 
 def construir() -> App:
     agente = LlmAgent(
-        name="health_advisor",
+        name="release_manager",
         model="gemini-2.5-flash",
         instruction=(
-            "You are a health assistant. Use calculate_bmi to compute the index "
-            "and get_advice to explain it. Never guess the numbers yourself."
+            "Eres el responsable de releases. Llama a next_version y a parse_commits "
+            "con la versión y los commits que te den; no calcules la versión tú. "
+            "Responde con la versión nueva, por qué ese salto y las notas agrupadas."
         ),
-        tools=[FunctionTool(func=calculate_bmi), FunctionTool(func=get_advice)],
+        tools=[FunctionTool(func=next_version), FunctionTool(func=parse_commits)],
     )
-    return App(name="health_advisor", root_agent=agente)
+    return App(name="release_manager", root_agent=agente)
 
 
 async def main() -> None:
@@ -71,7 +81,7 @@ async def main() -> None:
     )
     mensaje = types.Content(
         role="user",
-        parts=[types.Part.from_text(text="Peso 80 kg y mido 1.82 m, ¿cómo estoy?")],
+        parts=[types.Part.from_text(text="Versión actual: 1.4.2.\nfeat(api): paginación en /orders\nfix: cierre de conexiones al reiniciar")],
     )
     async for evento in runner.run_async(
         user_id="demo", session_id="demo-1", new_message=mensaje

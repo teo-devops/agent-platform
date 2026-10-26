@@ -15,7 +15,9 @@ AGENTCTL := $(BIN)/agentctl
 PKGS := "platform/core[tracing]" platform/runtime \
         "platform/runtimes/adk[tracing]" "platform/runtimes/langgraph[tracing]" \
         "platform/runtimes/langchain[tracing]" \
-        platform/mcp platform/a2a platform/kagent platform/integrations/mlflow
+        platform/mcp platform/a2a platform/kagent platform/integrations/mlflow \
+        platform/sandboxes/local platform/sandboxes/sbx platform/sandboxes/openshell \
+        platform/integrations/langflow
 
 # -- lab ----------------------------------------------------------------------
 CLUSTER   ?= agent-lab
@@ -48,16 +50,19 @@ MLFLOW_HINT := $(if $(MLFLOW_UP),Trazas en $(MLFLOW_URL)/$(HASH)/experiments/0/t
 
 .PHONY: help install test validate list run export schema docs eval eval-run \
         mlflow-local mlflow-init dev-adk dev-langgraph dev-langchain mcp mcp-inspector \
-        casos caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8 \
-        a2a-up a2a-run a2a-cards a2a-ensure a2a-down kagent-a2a \
+        casos caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8 caso-10 test-sandbox test-sbx test-openshell sandbox-image \
+        a2a-up a2a-catalog a2a-run a2a-cards a2a-ensure a2a-down kagent-a2a \
         lab cluster-up images skills platform deploy render prompts register refresh-tools metrics \
-        status ui-urls cluster-down clean
+        status ui-urls cluster-down clean langflow-up langflow-url langflow-down
 
 help:
 	@$(MAKE) --no-print-directory casos
 	@echo "Desarrollo"
 	@echo "  make install         .venv con todos los paquetes en modo editable"
 	@echo "  make test            tests (ninguno llama al modelo)"
+	@echo "  make test-sandbox    el backend de sandbox local con un contenedor real (Docker)"
+	@echo "  make test-sbx        el backend sbx con Docker Sandboxes de verdad (microVM)"
+	@echo "  make test-openshell  el backend openshell con un gateway de OpenShell de verdad"
 	@echo "  make validate        construye todos los manifiestos sin llamar al modelo"
 	@echo "  make eval            valida las suites de evals (sin clave)"
 	@echo "  make eval-run        ejecuta las suites y las publica en MLflow (con clave)"
@@ -98,6 +103,20 @@ install: $(BIN)/python
 
 test:
 	$(BIN)/python -m pytest -q
+
+# La prueba del sandbox con un contenedor de verdad (necesita Docker).
+test-sandbox:
+	AGENT_SANDBOX_DOCKER_TESTS=1 $(BIN)/python -m pytest -q tests/sandboxes tests/core/test_sandbox.py
+
+# Con los proveedores de verdad: Docker Sandboxes (sbx) y NVIDIA OpenShell (gateway en marcha).
+test-sbx:
+	AGENT_SANDBOX_SBX_TESTS=1 $(BIN)/python -m pytest -q tests/sandboxes/test_sbx.py
+test-openshell: sandbox-image
+	AGENT_SANDBOX_OPENSHELL_TESTS=1 $(BIN)/python -m pytest -q tests/sandboxes/test_openshell.py
+
+# La imagen de los sandboxes local y openshell: sin root y con /workspace.
+sandbox-image:
+	docker build -q -t agent-platform/sandbox:0.1.0 -f deploy/images/Dockerfile.sandbox deploy/images
 
 validate:
 	$(AGENTCTL) validate
@@ -177,41 +196,42 @@ mcp-inspector:
 casos:
 	@echo ""
 	@echo "Casos de uso — cada uno añade una forma de colaborar al anterior"
-	@echo "  make caso-1   greeting             un agente solo"
-	@echo "  make caso-2   health-advisor       un agente que llama a tools"
+	@echo "  make caso-1   tech-explainer       un agente solo: explica un concepto técnico"
+	@echo "  make caso-2   release-manager      un agente con tools: de los commits a la versión y sus notas"
 	@echo "  make caso-3   software-manager     delega en un desarrollador y un revisor (lo decide el modelo)"
-	@echo "  make caso-4   research-and-write   flujo secuencial (lo decide el YAML)"
-	@echo "  make caso-5   parallel-briefing    dos agentes en paralelo"
+	@echo "  make caso-4   tech-article         flujo secuencial: investigar y redactar (lo decide el YAML)"
+	@echo "  make caso-5   tech-briefing        en paralelo: una tecnología, dos audiencias"
 	@echo "  make caso-6   review-loop          bucle desarrollador <-> revisor"
 	@echo "  make caso-7   software-manager     el caso 3 por A2A: cada sub-agente en su proceso y framework"
 	@echo "  make caso-8   data-consumer        dos organizaciones hablando por A2A (dataspace)"
+	@echo "  make caso-10  python-executor      escribe código y lo EJECUTA en un sandbox aislado (Docker)"
 	@echo ""
-	@echo "  Opciones: MSG=\"...\" (tu mensaje)  RUNTIME=adk|langgraph|langchain (otro framework)"
+	@echo "  Opciones: MSG=\"...\" (tu mensaje)  RUNTIME=adk|langgraph|langchain (otro framework)  ENV=sandbox-sbx|sandbox-openshell (caso 10)"
 	@echo ""
 
-caso-1: CASO_AGENT := greeting
+caso-1: CASO_AGENT := tech-explainer
 caso-1: CASO_TITLE := Un agente solo: un modelo con instrucciones
-caso-1: CASO_MSG   := Hola, ¿qué sabes hacer?
-caso-1: CASO_UI    := make dev-adk AGENT=greeting
+caso-1: CASO_MSG   := ¿Qué es una API REST?
+caso-1: CASO_UI    := make dev-adk AGENT=tech-explainer
 
-caso-2: CASO_AGENT := health-advisor
-caso-2: CASO_TITLE := Un agente que llama a tools (código Python)
-caso-2: CASO_MSG   := Mido 1,80 m y peso 85 kg, ¿cómo voy?
-caso-2: CASO_UI    := make dev-adk AGENT=health-advisor  (pestaña Events: cada llamada a una tool)
+caso-2: CASO_AGENT := release-manager
+caso-2: CASO_TITLE := Un agente que llama a tools (código Python): la versión la calcula una función, no el modelo
+caso-2: CASO_MSG   := Versión actual: 1.4.2. Commits: feat(api): paginación en /orders · fix: cierre de conexiones al reiniciar · refactor!: elimina /v1/orders
+caso-2: CASO_UI    := make dev-adk AGENT=release-manager  (pestaña Events: cada llamada a una tool)
 
 caso-3: CASO_AGENT := software-manager
 caso-3: CASO_TITLE := Delegación decidida por el modelo: jefe, desarrollador y revisor
 caso-3: CASO_MSG   := Una función que valide un IBAN español
 caso-3: CASO_UI    := make dev-adk AGENT=software-manager  (Events: python_developer y code_reviewer)
 
-caso-4: CASO_AGENT := research-and-write
+caso-4: CASO_AGENT := tech-article
 caso-4: CASO_TITLE := Flujo secuencial: el orden lo fija el YAML, no el modelo
 caso-4: CASO_MSG   := Qué es el protocolo A2A, explicado para desarrolladores junior
 caso-4: CASO_UI    := make dev-langgraph  (el grafo del flujo en LangGraph Studio)
 
-caso-5: CASO_AGENT := parallel-briefing
-caso-5: CASO_TITLE := En paralelo: dos agentes sobre el mismo tema
-caso-5: CASO_MSG   := Kubernetes operators
+caso-5: CASO_AGENT := tech-briefing
+caso-5: CASO_TITLE := En paralelo: una tecnología, notas para el equipo y tres frases para dirección
+caso-5: CASO_MSG   := Adoptar Kubernetes operators para nuestras bases de datos
 caso-5: CASO_UI    := make dev-langgraph  (las dos ramas en LangGraph Studio)
 
 caso-6: CASO_AGENT := review-loop
@@ -231,14 +251,23 @@ caso-8: CASO_MSG   := Datos de movilidad en bicicleta para un producto comercial
 caso-8: CASO_ENV   := --env local-a2a
 caso-8: CASO_UI     = la organización A, en la terminal de make a2a-up (o tail -f $(A2A_LOG)). Prueba MSG='Datos de movilidad en bicicleta para investigación'
 
+caso-10: CASO_AGENT := python-executor
+caso-10: CASO_TITLE := Código ejecutado en un sandbox: sin red, raíz de sólo lectura, /workspace en memoria
+caso-10: CASO_MSG   := Una función que calcule la mediana de una lista de números
+caso-10: CASO_UI    := docker ps --filter label=agent-platform.sandbox=local (mientras corre) · configs/sandboxes.yaml
+
+# El caso del sandbox necesita su imagen (local y openshell).
+caso-10: sandbox-image
+
 # Los casos A2A necesitan a los sub-agentes escuchando: si no están, se levantan solos.
 caso-7 caso-8: a2a-ensure
 
 # Tu MSG gana al del caso; si no pasas ninguno, el de ejemplo.
 CASO_MESSAGE = $(if $(filter command line environment,$(origin MSG)),$(MSG),$(CASO_MSG))
-CASO_ARGS    = $(if $(RUNTIME),--runtime $(RUNTIME) )$(if $(CASO_ENV),$(CASO_ENV) )run $(CASO_AGENT) -v -m
+# ENV=<entorno> gana al del caso: make caso-10 ENV=sandbox-sbx
+CASO_ARGS    = $(if $(RUNTIME),--runtime $(RUNTIME) )$(if $(ENV),--env $(ENV) ,$(if $(CASO_ENV),$(CASO_ENV) ))run $(CASO_AGENT) -v -m
 
-caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8:
+caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8 caso-10:
 	@echo ""
 	@echo "  Caso $(@:caso-%=%) · $(CASO_TITLE)"
 	@echo "  \$$ agentctl $(CASO_ARGS) '$(CASO_MESSAGE)'"
@@ -247,6 +276,38 @@ caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8:
 	@echo ""
 	@echo "  Míralo también: $(CASO_UI)"
 	@echo "  $(MLFLOW_HINT)"
+
+# -- Langflow: la consola ------------------------------------------------------
+#
+# Langflow llama a los agentes por A2A; no los ejecuta (docs/control-plane.md).
+LANGFLOW_ENV  := .agent-platform/langflow.env
+LANGFLOW_URL  ?= http://127.0.0.1:7860
+# LANGFLOW_OTEL=1 añade sus trazas hacia MLflow (deploy/langflow/compose.otel.yaml).
+LANGFLOW_COMPOSE := docker compose -f deploy/langflow/compose.yaml $(if $(LANGFLOW_OTEL),-f deploy/langflow/compose.otel.yaml)
+
+$(LANGFLOW_ENV):
+	@mkdir -p .agent-platform
+	@printf 'LANGFLOW_SUPERUSER=admin\nLANGFLOW_SUPERUSER_PASSWORD=%s\nLANGFLOW_SECRET_KEY=%s\n' \
+	  "$$(openssl rand -hex 12)" "$$(openssl rand -base64 32)" > $@
+	@chmod 600 $@
+	@echo "  credenciales de Langflow generadas en $@ (no se versionan)"
+
+langflow-up: $(LANGFLOW_ENV)
+	@if [ -n "$(LANGFLOW_OTEL)" ]; then \
+	  [ "$(MLFLOW_UP)" = yes ] || { echo "LANGFLOW_OTEL necesita MLflow en $(MLFLOW_URL): make mlflow-local"; exit 1; }; \
+	  echo "  Trazas de Langflow -> $(MLFLOW_URL)/$(HASH)/experiments/0/traces, unidas a las de los agentes"; \
+	fi
+	@$(LANGFLOW_COMPOSE) up -d
+	@echo "  Esperando a Langflow en $(LANGFLOW_URL)..."
+	@for i in $$(seq 1 90); do curl -sf -o /dev/null $(LANGFLOW_URL)/health && break; sleep 2; done
+	@$(MAKE) --no-print-directory langflow-url
+
+langflow-url:
+	@echo "  Langflow: $(LANGFLOW_URL)   usuario: admin   clave: $$(sed -n 's/^LANGFLOW_SUPERUSER_PASSWORD=//p' $(LANGFLOW_ENV))"
+	@echo "  Los agentes, por A2A: make a2a-up   ·   un flujo del catálogo: agentctl langflow export tech-article"
+
+langflow-down:
+	$(LANGFLOW_COMPOSE) down
 
 # -- carril A2A local -----------------------------------------------------------
 #
@@ -257,6 +318,13 @@ caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8:
 A2A_AGENTS ?= python-developer:langgraph code-reviewer:langchain data-provider:langgraph
 # El que coordina: software-manager (ingeniería) o data-consumer (dataspace).
 A2A_AGENT  ?= software-manager
+
+# Todo lo que local-a2a.yaml declara, en el orden de sus puertos: lo que Langflow
+# necesita para llamar a cualquier agente del catálogo.
+A2A_CATALOG ?= python-developer:langgraph code-reviewer:langchain data-provider:langgraph \
+               tech-researcher tech-writer tech-explainer release-manager software-manager
+a2a-catalog:
+	@$(MAKE) --no-print-directory a2a-up A2A_AGENTS="$(A2A_CATALOG)"
 
 a2a-up:
 	$(OTEL_LOCAL) $(AGENTCTL) a2a serve $(A2A_AGENTS) --port $(A2A_PORT) -v

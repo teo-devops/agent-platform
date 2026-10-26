@@ -9,7 +9,9 @@ Layout expected under the repository root::
     configs/guardrails.yaml         named guardrail profiles
     configs/policies.yaml           named policy profiles
     configs/permissions.yaml        named permission profiles
-    configs/environments/<env>.yaml per-environment overrides
+    configs/sandboxes.yaml          named sandbox profiles
+    configs/environments/<env>.yaml per-environment overrides (and who isolates sandboxes)
+    agents/<name>/evals/            the agent's eval suite (dataset + judges)
 
 Resolution order for an agent (later layers win)::
 
@@ -45,12 +47,15 @@ if TYPE_CHECKING:  # pragma: no cover
 from .merge import interpolate, merge_all, render_template
 
 DEFAULT_ENVIRONMENT = "local"
+#: Folder, inside an agent's own, that holds its eval suite.
+EVALS_SUBDIR = "evals"
 
 _PROFILE_SECTIONS = {
     "model": "models",
     "guardrails": "guardrails",
     "policies": "policies",
     "permissions": "permissions",
+    "sandbox": "sandboxes",
 }
 
 
@@ -127,6 +132,26 @@ class ConfigStore:
             endpoints[name.strip()] = url.strip()
         return endpoints
 
+    @cached_property
+    def sandbox_backend(self) -> str | None:
+        """Who isolates, for every sandboxed agent of the fleet, if the environment says.
+
+        A sandbox profile says WHAT is isolated; which provider does it is a
+        decision of the environment, the same way where a sub-agent lives is::
+
+            # configs/environments/<env>.yaml
+            sandbox:
+              backend: openshell          # local | sbx | openshell
+
+            AGENT_SANDBOX_BACKEND=sbx     # the variable wins over the file
+
+        Only agents that already have a sandbox are moved: an environment never
+        gives one to an agent that did not ask for it.
+        """
+        block = self.environment_overlay.get("sandbox") or {}
+        chosen = os.getenv("AGENT_SANDBOX_BACKEND", "").strip() or block.get("backend")
+        return str(chosen) if chosen else None
+
     def profiles(self, section: str) -> dict[str, Any]:
         """Named profiles of a configs file (``models`` -> ``configs/models.yaml``)."""
         data = load_yaml(self.root / "configs" / f"{section}.yaml")
@@ -142,7 +167,7 @@ class ConfigStore:
     def agent_paths(self) -> dict[str, Path]:
         """Every agent in the catalogue, indexed by name.
 
-        Agents are grouped in domain folders (``catalog/agents/health/...``) so
+        Agents are grouped in domain folders (``catalog/agents/engineering/...``) so
         that a catalogue of fifty does not become one flat listing. The domain is
         filing, not identity: an agent is referenced by its name and moving it
         between folders changes nothing.
@@ -164,6 +189,19 @@ class ConfigStore:
 
     def list_agents(self) -> list[str]:
         return sorted(self.agent_paths)
+
+    def eval_suites(self) -> dict[str, Path]:
+        """Every eval suite, indexed by the agent it measures.
+
+        A suite lives inside its agent's folder (``<agente>/evals/``), so an
+        agent and what proves it works are one directory: there is no second
+        tree with the same names to keep in step.
+        """
+        return {
+            name: path.parent / EVALS_SUBDIR
+            for name, path in self.agent_paths.items()
+            if (path.parent / EVALS_SUBDIR / "dataset.yaml").exists()
+        }
 
     def list_workflows(self) -> list[str]:
         workflows_dir = self.root / WORKFLOWS_DIR
@@ -237,6 +275,7 @@ class ConfigStore:
         )
         body = self._resolve_profiles(body)
         body = self._resolve_prompt(body, path.parent)
+        body = self._place_sandbox(body)
 
         manifest = AgentManifest.model_validate(
             {
@@ -319,6 +358,14 @@ class ConfigStore:
                 )
             resolved[section] = merge_all(profiles[profile_name], block)
         return resolved
+
+    def _place_sandbox(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Apply the environment's sandbox provider to an agent that has a sandbox."""
+        sandbox = body.get("sandbox")
+        backend = self.sandbox_backend
+        if not backend or not isinstance(sandbox, dict) or sandbox.get("backend") in (None, "", "none"):
+            return body
+        return {**body, "sandbox": {**sandbox, "backend": backend}}
 
     @staticmethod
     def _resolve_prompt(body: dict[str, Any], agent_dir: Path) -> dict[str, Any]:

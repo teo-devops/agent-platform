@@ -17,6 +17,7 @@ from importlib.metadata import entry_points
 
 import yaml
 from agent_core.errors import PlatformError
+from agent_core.execution import stream_with_policies
 from agent_core.registry import COMMANDS_GROUP, EVAL_SINKS_GROUP
 from agent_core.telemetry import agent_span, flush
 
@@ -24,7 +25,6 @@ from .context import load_platform
 
 
 #: Dónde viven las suites de evaluación.
-EVALS_DIR = "evals"
 
 
 def _factory(args: argparse.Namespace):
@@ -120,7 +120,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     async def _run() -> None:
         print(f"[{args.name} @ {factory.environment} on {runtime.name}] > {args.message}\n", flush=True)
         with agent_span(result.manifest, runtime.name, args.message):
-            async for chunk in runtime.stream(app, args.message):
+            async for chunk in stream_with_policies(runtime, app, args.message, result.manifest):
                 # With narration on stderr, a chunk left mid-line would glue the
                 # next narrated step onto the answer.
                 end = "\n" if args.verbose and not chunk.endswith("\n") else ""
@@ -246,27 +246,31 @@ def cmd_eval(args: argparse.Namespace) -> int:
     from agent_core.evals.engine import JUDGE_AGENT
 
     factory = _factory(args)
-    root = factory.store.root
-    suites_dir = root / EVALS_DIR
+    suites = factory.store.eval_suites()
 
     if args.all:
-        names = sorted(p.parent.name for p in suites_dir.glob("*/dataset.yaml"))
+        names = sorted(suites)
     elif args.name:
+        if args.name not in suites:
+            print(f"error: '{args.name}' no tiene suite: crea su carpeta evals/ junto a su agent.yaml. "
+                  f"Con suite: {', '.join(sorted(suites)) or 'ninguno'}", file=sys.stderr)
+            return 2
         names = [args.name]
     else:
-        print("error: indica una suite, o usa --all", file=sys.stderr)
+        print("error: indica un agente, o usa --all", file=sys.stderr)
         return 2
 
     if not names:
-        print(f"error: no hay suites en {EVALS_DIR}/", file=sys.stderr)
+        print("error: ningún agente tiene carpeta evals/", file=sys.stderr)
         return 2
 
     if args.check:
         for name in names:
-            suite, _ = load_suite(suites_dir / name)
+            suite, _ = load_suite(suites[name])
             objetivo = suite.spec.target
-            if objetivo not in [*factory.store.list_agents(), *factory.store.list_workflows()]:
-                print(f"  FALLO {name}: evalúa '{objetivo}', que no existe", file=sys.stderr)
+            if objetivo != name:
+                print(f"  FALLO {name}: su suite evalúa '{objetivo}'; la suite de un agente le evalúa a él",
+                      file=sys.stderr)
                 return 1
             print(f"  OK    {name}  ({len(suite.spec.cases)} casos sobre '{objetivo}')")
         print(f"\n{len(names)} suite(s) válida(s).")
@@ -276,7 +280,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
     failed = 0
 
     for name in names:
-        suite, criteria = load_suite(suites_dir / name)
+        suite, criteria = load_suite(suites[name])
         runtime = factory.runtime(factory.runtime_name(factory.store.load(suite.spec.target)))
 
         target_runner = _target_runner(factory, runtime, suite.spec.target)
@@ -306,7 +310,7 @@ def _target_runner(factory: Any, runtime: Any, target: str):
     async def run(message: str) -> str:
         with agent_span(result.manifest, runtime.name, message) as span:
             trace_ids.append(format(span.get_span_context().trace_id, "032x") if span else None)
-            chunks = [chunk async for chunk in runtime.stream(app, message)]
+            chunks = [chunk async for chunk in stream_with_policies(runtime, app, message, result.manifest)]
         return "".join(chunks)
 
     #: One per call, in order: the engine runs the cases one after another.
@@ -371,6 +375,8 @@ def _report(result: Any, runtime: str, *, judged: bool) -> bool:
             print(f"        {case.error}")
         for failure in case.failures:
             print(f"        {failure}")
+        # Sin ver la respuesta, un fallo no se puede diagnosticar: ¿mal la suite o mal el agente?
+        print(f"        respuesta: {_preview(case.output) or '(vacía)'}")
 
     total = len(result.cases)
     passed = sum(1 for case in result.cases if case.passed)
@@ -383,6 +389,11 @@ def _report(result: Any, runtime: str, *, judged: bool) -> bool:
         f"-> {'OK' if ok else 'POR DEBAJO'}"
     )
     return ok
+
+
+def _preview(text: str, limit: int = 160) -> str:
+    flat = " ".join(str(text).split())
+    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
 
 def cmd_ui(args: argparse.Namespace) -> int:
@@ -443,8 +454,8 @@ def build_parser() -> argparse.ArgumentParser:
         "eval",
         help="Run an evaluation suite and report the metric against its threshold",
     )
-    evaluate.add_argument("name", nargs="?")
-    evaluate.add_argument("--all", action="store_true", help="Run every suite in evals/")
+    evaluate.add_argument("name", nargs="?", help="The agent whose evals/ suite to run")
+    evaluate.add_argument("--all", action="store_true", help="Run the suite of every agent that has one")
     evaluate.add_argument(
         "--check",
         action="store_true",
@@ -467,7 +478,7 @@ def build_parser() -> argparse.ArgumentParser:
         "ui",
         help="Open the development playground of the runtime (adk web / langgraph dev)",
     )
-    ui.add_argument("agent", nargs="?", help="Agent to open (ADK only; default: greeting)")
+    ui.add_argument("agent", nargs="?", help="Agent to open first (ADK only); every agent is in the dropdown anyway")
     ui.add_argument("--port", type=int, help="Port to serve on")
     ui.set_defaults(func=cmd_ui)
 

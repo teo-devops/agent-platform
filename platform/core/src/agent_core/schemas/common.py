@@ -6,7 +6,7 @@ import fnmatch
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 
@@ -38,8 +38,15 @@ class Metadata(Spec):
 
     @property
     def python_name(self) -> str:
-        """The name in the identifier form runtimes require (``health_advisor``)."""
+        """The name in the identifier form runtimes require (``release_manager``)."""
         return self.name.replace("-", "_")
+
+
+class ModelPricing(Spec):
+    """What a model costs, in dollars per million tokens. Lo que `budget.max_usd` usa para contar."""
+
+    input_per_mtok: float = Field(ge=0, description="Dólares por millón de tokens de entrada.")
+    output_per_mtok: float = Field(ge=0, description="Dólares por millón de tokens de salida.")
 
 
 class ModelSpec(Spec):
@@ -57,6 +64,7 @@ class ModelSpec(Spec):
     top_k: int | None = Field(default=None, ge=1, description="Muestreo por k. Gemini lo tiene; OpenAI no. Un runtime que no lo entienda lo ignora avisando.")
     max_output_tokens: int | None = Field(default=None, ge=1, description="Techo de tokens de la respuesta.")
     stop_sequences: list[str] = Field(default_factory=list, description="Cadenas que cortan la generación. No todos los proveedores las aplican igual.")
+    pricing: ModelPricing | None = Field(default=None, description="Precio del modelo. Sin él, `budget.max_usd` no puede contar y se avisa al construir.")
 
 
 class PromptSpec(Spec):
@@ -76,7 +84,7 @@ class PromptSpec(Spec):
 class ToolRef(Spec):
     """A reference to a registered tool, optionally disabled per environment."""
 
-    ref: str = Field(description="Referencia registrada, p. ej. `health.calculate_bmi`. Mírales el nombre con `agentctl components`.")
+    ref: str = Field(description="Referencia registrada, p. ej. `release.next_version`. Mírales el nombre con `agentctl components`.")
     alias: str | None = Field(default=None, description="Otro nombre con el que el modelo verá la herramienta.")
     enabled: bool = Field(default=True, description="Ponlo a false en un overlay de entorno para quitarla sin tocar el manifiesto.")
     params: dict[str, Any] = Field(default_factory=dict, description="Parámetros fijos para la herramienta.")
@@ -135,7 +143,7 @@ class BudgetSpec(Spec):
     """Cost ceilings for a single invocation."""
 
     max_tokens: int | None = Field(default=None, ge=1, description="Techo de tokens de una invocación.")
-    max_usd: float | None = Field(default=None, ge=0, description="Declarado, todavía no contabilizado: hoy el corte se hace por tokens.")
+    max_usd: float | None = Field(default=None, ge=0, description="Techo en dólares de una invocación. Se calcula con `model.pricing`.")
 
 
 class PolicySpec(Spec):
@@ -144,15 +152,15 @@ class PolicySpec(Spec):
     profile: str | None = Field(default=None, description="Perfil de configs/policies.yaml del que se hereda.")
     max_tool_calls: int | None = Field(default=None, ge=1, description="Techo de llamadas a herramienta por invocación.")
     max_llm_calls: int | None = Field(default=None, ge=1, description="Techo de llamadas al modelo por invocación.")
-    timeout_seconds: float | None = Field(default=None, gt=0, description="Declarado y validado; todavía no lo aplica ningún runtime.")
-    retry_attempts: int = Field(default=0, ge=0, description="Reintentos. Es el único límite que cruza al orquestador, como `retries` de cada paso.")
+    timeout_seconds: float | None = Field(default=None, gt=0, description="Tiempo máximo de una invocación, reintentos incluidos. Al pasarlo, la ejecución se corta.")
+    retry_attempts: int = Field(default=0, ge=0, description="Reintentos ante fallos transitorios, sólo mientras no se haya emitido nada. Un guardrail o un permiso no se reintentan.")
     budget: BudgetSpec = Field(default_factory=BudgetSpec, description="Techos de coste de una invocación.")
 
 
 class AllowDeny(Spec):
     """Glob allow/deny lists. ``deny`` always wins over ``allow``."""
 
-    allow: list[str] = Field(default_factory=lambda: ["*"], description="Patrones permitidos, p. ej. `[\"health.*\"]`.")
+    allow: list[str] = Field(default_factory=lambda: ["*"], description="Patrones permitidos, p. ej. `[\"code.*\"]`.")
     deny: list[str] = Field(default_factory=list, description="Patrones prohibidos. `deny` gana siempre sobre `allow`.")
 
     def permits(self, ref: str) -> bool:
@@ -206,3 +214,74 @@ class PluginRef(Spec):
     ref: str = Field(description="Plugin registrado, más allá de los que salen de guardrails/permisos/política.")
     enabled: bool = Field(default=True, description="Permite desactivarlo por entorno.")
     config: dict[str, Any] = Field(default_factory=dict, description="Configuración que recibe el plugin.")
+
+
+class FilesystemSpec(Spec):
+    """What the sandbox may see of its filesystem. Paths are inside the sandbox."""
+
+    read: list[str] = Field(default_factory=lambda: ["/workspace"], description="Rutas legibles.")
+    write: list[str] = Field(default_factory=lambda: ["/workspace"], description="Rutas escribibles. Siempre un subconjunto de lo legible.")
+
+
+class EgressSpec(Spec):
+    """Outbound connections. ``deny`` by default: an agent reaches only what is listed."""
+
+    default: Literal["deny", "allow"] = Field(default="deny", description="Qué pasa con un destino no listado.")
+    allow: list[str] = Field(default_factory=list, description="Hosts permitidos (`pypi.org`, `*.github.com`).")
+
+
+class NetworkSpec(Spec):
+    egress: EgressSpec = Field(default_factory=EgressSpec, description="Conexiones salientes.")
+
+
+class ProcessSpec(Spec):
+    allow_exec: bool = Field(default=True, description="Si puede lanzar procesos. A false, sólo lee y escribe ficheros.")
+    max_procs: int | None = Field(default=None, ge=1, description="Techo de procesos simultáneos.")
+
+
+class InferenceSpec(Spec):
+    """Whether code inside the sandbox may call a model, and through what."""
+
+    route: Literal["none", "platform", "direct"] = Field(
+        default="none",
+        description="`none`: sin modelo dentro. `platform`: sólo por la pasarela de la plataforma "
+                    "(las credenciales no entran en el sandbox). `direct`: el sandbox habla con el proveedor.",
+    )
+
+
+class ResourceSpec(Spec):
+    cpu: str | None = Field(default=None, description="CPU, en unidades de Kubernetes (`500m`, `2`).")
+    memory: str | None = Field(default=None, description="Memoria, en unidades de Kubernetes (`512Mi`).")
+    command_timeout_seconds: float = Field(default=60, gt=0, description="Tiempo máximo de cada comando.")
+    ttl_seconds: int | None = Field(default=None, ge=1, description="Vida máxima del sandbox. Vacío, vive lo que la invocación.")
+
+
+class SandboxSpec(Spec):
+    """Where the code an agent runs is executed, and what it may reach from there.
+
+    Neutral on purpose: it says *what* is isolated, not *how*. A backend
+    (``local``, ``openshell``, ``k8s``...) is an installed package that turns
+    this into a container, an OpenShell policy or a pod. Without ``backend`` the
+    agent has no sandbox, and tools that need one are refused at build time.
+    """
+
+    profile: str | None = Field(default=None, description="Perfil de configs/sandboxes.yaml del que se hereda.")
+    backend: str | None = Field(default=None, description="Quién aísla: `local`, `openshell`, `k8s`... Vacío, el agente no tiene sandbox.")
+    image: str | None = Field(default=None, description="Imagen base del sandbox, si el backend usa contenedores.")
+    filesystem: FilesystemSpec = Field(default_factory=FilesystemSpec, description="Qué ve del sistema de ficheros.")
+    network: NetworkSpec = Field(default_factory=NetworkSpec, description="Qué alcanza por red.")
+    process: ProcessSpec = Field(default_factory=ProcessSpec, description="Qué procesos puede lanzar.")
+    inference: InferenceSpec = Field(default_factory=InferenceSpec, description="Si dentro se puede llamar a un modelo.")
+    resources: ResourceSpec = Field(default_factory=ResourceSpec, description="CPU, memoria y tiempos.")
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.backend) and self.backend != "none"
+
+    @model_validator(mode="after")
+    def _write_within_read(self) -> "SandboxSpec":
+        outside = [w for w in self.filesystem.write
+                   if not any(w == r or w.startswith(r.rstrip("/") + "/") for r in self.filesystem.read)]
+        if outside:
+            raise ValueError(f"sandbox.filesystem.write {outside} is not inside any readable path")
+        return self

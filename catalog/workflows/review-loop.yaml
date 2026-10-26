@@ -3,9 +3,9 @@ kind: Workflow
 metadata:
   name: review-loop
   version: 0.1.0
-  description: Writes code and reviews it repeatedly until the iteration budget runs out.
+  description: Bucle desarrollador ↔ revisor — escribe, revisa y corrige hasta agotar las vueltas.
   owner: dev-tools-team
-  tags: [demo, loop]
+  tags: [demo, loop, engineering]
 spec:
   type: loop
   max_iterations: 2

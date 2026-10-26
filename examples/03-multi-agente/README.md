@@ -18,7 +18,7 @@ Si quieres saber en todo momento quién está respondiendo, quieres `tool`.
 
 ## En la plataforma
 
-[`agents/software-manager/agent.yaml`](../../agents/software-manager/agent.yaml):
+[`software-manager`](../../catalog/agents/engineering/software-manager/agent.yaml):
 
 ```yaml
 spec:

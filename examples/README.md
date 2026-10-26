@@ -1,6 +1,7 @@
 # La escalera
 
-Cuatro escalones. Cada uno añade **una** idea a la anterior, y cada uno está
+Cuatro escalones, los cuatro primeros casos de `make casos`, con los mismos
+agentes del catálogo. Cada uno añade **una** idea a la anterior, y cada uno está
 resuelto dos veces: como manifiesto declarativo de esta plataforma, y a mano en
 el idioma nativo de ADK, LangGraph y LangChain.
 
@@ -10,10 +11,10 @@ depurar dentro del framework y no sabes por dónde entrar.
 
 | # | Escalón | La idea nueva | En la plataforma |
 |---|---------|---------------|------------------|
-| 1 | [Agente simple](01-agente-simple/) | Un modelo con instrucciones | `agents/greeting` |
-| 2 | [Tools](02-tools/) | El modelo llama a tu código | `agents/health-advisor` |
-| 3 | [Multi-agente](03-multi-agente/) | Un agente delega en otros | `agents/software-manager` |
-| 4 | [Flujo determinista](04-flujo-determinista/) | El orden lo decides tú, no el modelo | `workflows/research-and-write` |
+| 1 | [Agente simple](01-agente-simple/) | Un modelo con instrucciones | `tech-explainer`: explica un concepto técnico |
+| 2 | [Tools](02-tools/) | El modelo llama a tu código | `release-manager`: de los commits a la versión |
+| 3 | [Multi-agente](03-multi-agente/) | Un agente delega en otros | `software-manager`: delega en desarrollador y revisor |
+| 4 | [Flujo determinista](04-flujo-determinista/) | El orden lo decides tú, no el modelo | `tech-article`: investigar y redactar |
 
 El salto interesante es el 3→4. En el 3 es el **modelo** quien decide a quién
 llamar y cuándo parar; en el 4 lo decides **tú** y el modelo sólo rellena los
@@ -25,8 +26,8 @@ en el escalón 3 cuando debía estar en el 4.
 Los manifiestos, con la plataforma:
 
 ```bash
-agentctl run greeting -m "hola"
-agentctl --runtime langgraph run greeting -m "hola"    # el mismo manifiesto
+agentctl run tech-explainer -m "¿Qué es una API REST?"
+agentctl --runtime langgraph run tech-explainer -m "¿Qué es una API REST?"   # el mismo manifiesto
 ```
 
 El código nativo, directamente:

@@ -6,8 +6,8 @@ catalogue, another team — reads that same vocabulary. What this module does is
 answer the questions an author is allowed to leave implicit:
 
 * ``type: sequential`` says the shape; the resolved form spells out ``needs``.
-* ``agent: researcher`` says which agent; the resolved form pins
-  ``researcher@0.1.0``, because a floating reference runs something different
+* ``agent: tech-researcher`` says which agent; the resolved form pins
+  ``tech-researcher@0.1.0``, because a floating reference runs something different
   depending on the day.
 * profiles and environment overlays are already expanded by the store, so what
   gets published is what would actually run.

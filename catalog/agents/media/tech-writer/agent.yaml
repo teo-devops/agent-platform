@@ -1,0 +1,20 @@
+apiVersion: agents.platform/v1
+kind: Agent
+metadata:
+  name: tech-writer
+  version: 0.1.0
+  description: Convierte notas técnicas en un artículo para el blog de ingeniería, legible y sin perder rigor.
+  owner: media-team
+  tags: [demo, workflow-step, media]
+spec:
+  model:
+    profile: creative
+  prompt:
+    file: prompt.md
+  tools:
+    - ref: text.readability
+    - ref: text.word_count
+  permissions:
+    tools:
+      allow: ["text.*"]
+  output_key: article
