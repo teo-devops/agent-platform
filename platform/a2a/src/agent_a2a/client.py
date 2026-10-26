@@ -1,8 +1,16 @@
 """Calling an agent that runs in another process, over A2A.
 
-One JSON-RPC method is enough for delegation: ``message/send``. The answer is
-either a ``Message`` or a ``Task``; kagent answers with tasks, a server of this
-package with messages, and :func:`answer_text` reads both.
+Delegation is ``message/send``. The answer is either a ``Message`` or a
+``Task``; kagent answers with tasks, a server of this package with messages, and
+:func:`answer_text` reads both.
+
+A task can come back before it is done. The request asks to block
+(``configuration.blocking``), but a server is free to answer early anyway —
+kagent's controller does, for BYO agents, with the task still ``working``. A
+coordinator that read that as the answer would get an empty string and carry on
+as if the sub-agent had said nothing. So an unfinished task is followed with
+``tasks/get`` until it ends or the delegate's timeout runs out. ``tasks/get``
+only reads, so unlike ``message/send`` it is safe to repeat after any error.
 
 Each call opens an ``a2a.send`` span and injects ``traceparent`` into the
 request, so a trace that crosses the wire is still one trace — in MLflow, and in
@@ -44,7 +52,14 @@ RETRY_BACKOFF = float(os.getenv("AGENT_A2A_BACKOFF", "0.5"))
 BREAKER_THRESHOLD = int(os.getenv("AGENT_A2A_BREAKER_THRESHOLD", "3"))
 #: Seconds an open circuit fails fast before letting one call through.
 BREAKER_COOLDOWN = float(os.getenv("AGENT_A2A_BREAKER_COOLDOWN", "30"))
+#: Seconds between two ``tasks/get`` of an unfinished task; doubles up to the max.
+POLL_INTERVAL = float(os.getenv("AGENT_A2A_POLL_INTERVAL", "0.5"))
+POLL_INTERVAL_MAX = 5.0
 CARD_PATH = "/.well-known/agent-card.json"
+
+#: Task states after which nothing else will happen without the caller.
+#: ``input-required`` and ``auth-required`` are the agent waiting for us.
+_FINAL_STATES = {"completed", "failed", "rejected", "canceled", "input-required", "auth-required"}
 
 #: Statuses with which a proxy says the request did not reach the agent.
 _RETRYABLE_STATUS = {502, 503, 504}
@@ -125,6 +140,7 @@ class A2ADelegate:
 
     def __call__(self, request: str) -> str:
         self.breaker.check(self.name, self.url)
+        deadline = time.monotonic() + self.timeout
         with _span(self.name, self.url) as span:
             payload = _payload(request)
             with httpx.Client(timeout=self.timeout) as client:
@@ -140,11 +156,23 @@ class A2ADelegate:
                         _note_retry(span, attempt)
                         time.sleep(self._wait(attempt))
                         continue
-                    return self._answer(response, span)
+                    result = self._answer(response)
+                    polls = 0
+                    while _unfinished(result):
+                        pause = self._pause(polls, deadline, result, span)
+                        time.sleep(pause)
+                        polls += 1
+                        try:
+                            got = client.post(self.url, json=_get_task(result), headers=_headers())
+                        except httpx.HTTPError:
+                            continue  # only a read: the next poll is as good as a retry
+                        result = _result(got, self.name, self.url) if got.status_code < 500 else result
+                    return _finish(result, self.name, span, polls)
         raise AssertionError("unreachable")  # pragma: no cover
 
     async def acall(self, request: str) -> str:
         self.breaker.check(self.name, self.url)
+        deadline = time.monotonic() + self.timeout
         with _span(self.name, self.url) as span:
             payload = _payload(request)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -160,7 +188,18 @@ class A2ADelegate:
                         _note_retry(span, attempt)
                         await asyncio.sleep(self._wait(attempt))
                         continue
-                    return self._answer(response, span)
+                    result = self._answer(response)
+                    polls = 0
+                    while _unfinished(result):
+                        pause = self._pause(polls, deadline, result, span)
+                        await asyncio.sleep(pause)
+                        polls += 1
+                        try:
+                            got = await client.post(self.url, json=_get_task(result), headers=_headers())
+                        except httpx.HTTPError:
+                            continue
+                        result = _result(got, self.name, self.url) if got.status_code < 500 else result
+                    return _finish(result, self.name, span, polls)
         raise AssertionError("unreachable")  # pragma: no cover
 
     # -- internals -----------------------------------------------------------
@@ -175,10 +214,23 @@ class A2ADelegate:
     def _wait(self, attempt: int) -> float:
         return self.backoff * 2 ** attempt
 
-    def _answer(self, response: httpx.Response, span: Any) -> str:
+    def _answer(self, response: httpx.Response) -> dict[str, Any]:
         # An agent that answers with an error is up; one that answers 5xx is not.
         self.breaker.record(ok=response.status_code < 500)
-        return _read(response, self.name, self.url, span)
+        return _result(response, self.name, self.url)
+
+    def _pause(self, polls: int, deadline: float, result: dict[str, Any], span: Any) -> float:
+        """How long to wait before the next ``tasks/get``; an error once the time is up."""
+        left = deadline - time.monotonic()
+        if left <= 0:
+            state = _state(result)
+            if span is not None:
+                span.set_attribute("a2a.task.state", state)
+            raise self._fail(A2AError(
+                f"'{self.name}' at {self.url} was still {state} on task {result.get('id')} after "
+                f"{self.timeout:.0f}s (AGENT_A2A_TIMEOUT)"
+            ))
+        return min(POLL_INTERVAL * 2 ** polls, POLL_INTERVAL_MAX, left)
 
     def _fail(self, error: A2AError) -> A2AError:
         self.breaker.record(ok=False)
@@ -231,6 +283,8 @@ def _payload(text: str) -> dict[str, Any]:
         "id": uuid.uuid4().hex,
         "method": "message/send",
         "params": {
+            # Wait for the answer if the server can; _unfinished() covers it if it does not.
+            "configuration": {"blocking": True},
             "message": {
                 "kind": "message",
                 "role": "user",
@@ -239,6 +293,19 @@ def _payload(text: str) -> dict[str, Any]:
             }
         },
     }
+
+
+def _get_task(result: dict[str, Any]) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": uuid.uuid4().hex, "method": "tasks/get", "params": {"id": result["id"]}}
+
+
+def _state(result: dict[str, Any]) -> str:
+    return (result.get("status") or {}).get("state") or result.get("kind", "")
+
+
+def _unfinished(result: dict[str, Any]) -> bool:
+    """A task the server returned before it ended (and that can be looked up again)."""
+    return result.get("kind") == "task" and bool(result.get("id")) and _state(result) not in _FINAL_STATES
 
 
 def _headers() -> dict[str, str]:
@@ -252,7 +319,8 @@ def _headers() -> dict[str, str]:
     return headers
 
 
-def _read(response: httpx.Response, name: str, url: str, span: Any) -> str:
+def _result(response: httpx.Response, name: str, url: str) -> dict[str, Any]:
+    """The ``result`` of a JSON-RPC answer, or an error saying why there is none."""
     try:
         response.raise_for_status()
         body = response.json()
@@ -263,10 +331,15 @@ def _read(response: httpx.Response, name: str, url: str, span: Any) -> str:
         error = body["error"]
         raise A2AError(f"'{name}' answered with an A2A error {error.get('code')}: {error.get('message')}")
 
-    result = body.get("result") or {}
-    state = (result.get("status") or {}).get("state") or result.get("kind", "")
+    return body.get("result") or {}
+
+
+def _finish(result: dict[str, Any], name: str, span: Any, polls: int = 0) -> str:
+    state = _state(result)
     if span is not None:
         span.set_attribute("a2a.task.state", state)
+        if polls:
+            span.set_attribute("a2a.task.polls", polls)
     if state in {"failed", "rejected", "canceled"}:
         raise A2AError(f"'{name}' ended the task as {state}: {answer_text(result)}")
     return answer_text(result)
