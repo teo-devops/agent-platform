@@ -1,0 +1,14 @@
+# Las Applications comunes a todos los entornos. Cada overlay las toma y cambia
+# sólo lo que diverge (imágenes, exposición, secretos).
+#
+# El orden lo dan las sync-waves: namespaces (-2) → CRDs de kagent (-1) →
+# observabilidad y monitorización (0) → kagent (1), que manda sus trazas al
+# collector de observability.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - base.yaml
+  - kagent-crds.yaml
+  - observability.yaml
+  - monitoring.yaml
+  - kagent.yaml

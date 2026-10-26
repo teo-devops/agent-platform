@@ -85,8 +85,8 @@ def render(factory: Any, release: Release, *, prompt_versions: dict[str, str] | 
         manifest = factory.store.load(entry.name)
         if manifest.kind != "Agent":
             raise ConfigError(
-                f"'{entry.name}' is a {manifest.kind}. kagent runs agents; a workflow needs an "
-                f"orchestrator (see genai-platform) or a coordinator agent in mode: byo."
+                f"'{entry.name}' is a {manifest.kind}. kagent runs agents; run the workflow with "
+                f"`agentctl run` or `a2a serve`, or give it a coordinator agent in mode: byo."
             )
         version = (prompt_versions or {}).get(entry.name)
         if entry.mode == "declarative":

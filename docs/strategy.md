@@ -26,7 +26,7 @@ requerir un release de la plataforma.**
 | A2A y MCP sin autenticación ni identidad de agente | ⏳ Fase 1 |
 | Guardrails sólo léxicos; sin motor de políticas externo | ⏳ Fase 1 |
 | Sin memoria, sin tareas largas, sin aprobación humana, sin disparadores | ⏳ Fase 3 |
-| Mono-tenant, sólo kind; sin Helm/GitOps ni gestión de secretos | ⏳ Fase 4 |
+| Mono-tenant; sin gestión de secretos | ⏳ Fase 4 (GitOps: 🟡 [ADR 0007](adr/0007-gitops-absorbe-genai-platform.md)) |
 | Sin scaffolding para que otro equipo arranque | ⏳ Fase 4 |
 
 ## Principio rector
@@ -66,7 +66,7 @@ flowchart TB
         L["local · A2A local"]
         K["kagent"]
         O["OpenShell*"]
-        H["Helm / GitOps*"]
+        H["ArgoCD (deploy/gitops) ✅"]
     end
 
     CAT --> CORE --> EP --> RUN
@@ -164,7 +164,7 @@ desarrollar, no es una frontera contra un atacante decidido.
    plantillas — agente + prompt + eval mínima + entrada en el release.
 2. **Multi-tenant**: `catalog/<tenant>/…` y `configs/tenants/<tenant>.yaml` como
    capa nueva en `config/merge.py` (flota → tenant → agente → entorno).
-3. **Despliegue productivo**: Helm chart + overlays + Argo CD; kind queda como "lab".
+3. **Despliegue productivo**: 🟡 `deploy/gitops` (ArgoCD, overlays `prod` y `lab`; [ADR 0007](adr/0007-gitops-absorbe-genai-platform.md)). Pendiente: los agentes renderizados (`agentctl kagent render`) publicados por el CI para que ArgoCD los sincronice, y los Secrets con External Secrets.
 4. **Gobierno**: `CODEOWNERS` por dominio, ADRs, política de versiones del API
    (`agents.platform/v1` → `agentctl migrate`), eval mínima como puerta de `make deploy`.
 5. **Adopción**: guía "de cero a tu primer agente", matriz de responsabilidades

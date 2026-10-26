@@ -1,0 +1,21 @@
+# kube-prometheus-stack, común a todos los entornos.
+alertmanager:
+  enabled: false
+prometheus:
+  prometheusSpec:
+    # Recoge cualquier ServiceMonitor del clúster, no sólo los de este release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources: { requests: { storage: 20Gi } }
+grafana:
+  # La clave no vive en git: el Secret lo crea quien opera el clúster
+  # (`make gitops-lab` en el laboratorio; ADR 0007 en producción).
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password

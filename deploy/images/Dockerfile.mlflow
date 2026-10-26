@@ -1,3 +1,9 @@
 # MLflow con cliente S3: la imagen oficial no trae boto3 y los artefactos van a SeaweedFS.
-FROM ghcr.io/mlflow/mlflow:v3.16.1
-RUN pip install --no-cache-dir "boto3>=1.34"
+FROM ghcr.io/mlflow/mlflow:v3.17.2
+# La imagen oficial llega con paquetes del sistema y de Python que ya tienen arreglo:
+# sin esto, el escaneo de Trivy del CI (HIGH/CRITICAL corregibles) la rechaza.
+# setuptools trae copias propias de wheel y jaraco.context: también hay que subirlo.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir --upgrade "boto3>=1.34" "pillow>=13" "aiohttp>=3.14.4" \
+      "GitPython>=3.2.1" "certifi>=2026.10.19" "wheel>=0.46.2" "jaraco.context>=6.1" \
+      "setuptools>=80.10"

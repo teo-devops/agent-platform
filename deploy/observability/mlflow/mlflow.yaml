@@ -24,7 +24,7 @@ spec:
       containers:
         - name: mlflow
           # ghcr.io/mlflow/mlflow + boto3 (deploy/images/Dockerfile.mlflow)
-          image: localhost:5001/agent-platform/mlflow:3.16.1
+          image: localhost:5001/agent-platform/mlflow:3.17.2
           args:
             - mlflow
             - server

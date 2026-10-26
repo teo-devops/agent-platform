@@ -1,0 +1,6 @@
+# El laboratorio: sin volumen y con poca retención. Grafana por port-forward:
+#   kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
+prometheus:
+  prometheusSpec:
+    retention: 1d
+    storageSpec: null

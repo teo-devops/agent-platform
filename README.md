@@ -571,9 +571,11 @@ agent-platform/
 │   ├── kind/                  el clúster del laboratorio
 │   ├── observability/         SeaweedFS + MLflow + OTel Collector (kustomize)
 │   ├── kagent/                values de Helm y release.yaml (qué agentes, en qué modo)
+│   ├── gitops/                ArgoCD: app-of-apps y overlays prod · lab (ADR 0007)
 │   ├── images/                Dockerfiles: agent-host, mcp, mlflow, skill
 │   └── scripts/
 │
+├── schemas/                   el JSON Schema de agent y workflow (make schema; un test lo vigila)
 ├── docs/                      strategy · concepts · demo · architecture · configuration · adr/
 ├── examples/                  la escalera de 4 escalones, a mano en los 3 frameworks
 ├── tests/                     core · runtime · runtimes · mcp · kagent · integrations · catalog
@@ -618,6 +620,10 @@ make status
 
 Tras cambiar un agente: `make deploy` (registra el prompt, regenera los CRDs,
 aplica y registra la versión del agente). Para borrarlo todo: `make cluster-down`.
+
+Con ArgoCD en vez de helm: `make gitops-lab` sincroniza `deploy/gitops/overlays/lab`
+desde GitHub; en producción se aplica `deploy/gitops/bootstrap/root-prod.yaml`
+(qué crear antes y qué queda fuera: [ADR 0007](docs/adr/0007-gitops-absorbe-genai-platform.md)).
 
 ---
 

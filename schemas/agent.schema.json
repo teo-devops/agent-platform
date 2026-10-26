@@ -1,0 +1,1001 @@
+{
+  "$defs": {
+    "AgentBody": {
+      "additionalProperties": false,
+      "description": "Everything that can be changed about an agent without touching code.",
+      "properties": {
+        "runtime": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Framework que lo ejecuta: adk, langgraph o langchain. Vacío, se aplica el de configs/defaults.yaml.",
+          "title": "Runtime"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelSpec",
+          "description": "Qué modelo responde y con qué ajustes."
+        },
+        "prompt": {
+          "$ref": "#/$defs/PromptSpec",
+          "description": "Las instrucciones del agente."
+        },
+        "tools": {
+          "description": "Herramientas que puede llamar.",
+          "items": {
+            "$ref": "#/$defs/ToolRef"
+          },
+          "title": "Tools",
+          "type": "array"
+        },
+        "skills": {
+          "description": "Skills del catálogo. Sólo su descripción viaja en el prompt; el cuerpo lo pide el agente con `skill.read`.",
+          "items": {
+            "$ref": "#/$defs/SkillRef"
+          },
+          "title": "Skills",
+          "type": "array"
+        },
+        "sub_agents": {
+          "description": "Agentes a los que puede delegar.",
+          "items": {
+            "$ref": "#/$defs/SubAgentRef"
+          },
+          "title": "Sub Agents",
+          "type": "array"
+        },
+        "guardrails": {
+          "$ref": "#/$defs/GuardrailsSpec",
+          "description": "Qué se comprueba antes y después del modelo."
+        },
+        "policies": {
+          "$ref": "#/$defs/PolicySpec",
+          "description": "Cuánto trabajo puede hacer una invocación."
+        },
+        "permissions": {
+          "$ref": "#/$defs/PermissionSpec",
+          "description": "Qué puede alcanzar. Se comprueba al construir y al llamar."
+        },
+        "sandbox": {
+          "$ref": "#/$defs/SandboxSpec",
+          "description": "Dónde se ejecuta el código que lanza el agente y qué alcanza desde ahí. Sin `backend`, no hay sandbox y las tools `sandbox.*` no se adjuntan."
+        },
+        "plugins": {
+          "description": "Plugins extra, más allá de los derivados de lo anterior.",
+          "items": {
+            "$ref": "#/$defs/PluginRef"
+          },
+          "title": "Plugins",
+          "type": "array"
+        },
+        "output_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nombre con el que su respuesta queda en el estado compartido, para que otro paso la lea.",
+          "title": "Output Key"
+        }
+      },
+      "title": "AgentBody",
+      "type": "object"
+    },
+    "AllowDeny": {
+      "additionalProperties": false,
+      "description": "Glob allow/deny lists. ``deny`` always wins over ``allow``.",
+      "properties": {
+        "allow": {
+          "description": "Patrones permitidos, p. ej. `[\"code.*\"]`.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Allow",
+          "type": "array"
+        },
+        "deny": {
+          "description": "Patrones prohibidos. `deny` gana siempre sobre `allow`.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Deny",
+          "type": "array"
+        }
+      },
+      "title": "AllowDeny",
+      "type": "object"
+    },
+    "BudgetSpec": {
+      "additionalProperties": false,
+      "description": "Cost ceilings for a single invocation.",
+      "properties": {
+        "max_tokens": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo de tokens de una invocación.",
+          "title": "Max Tokens"
+        },
+        "max_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo en dólares de una invocación. Se calcula con `model.pricing`.",
+          "title": "Max Usd"
+        }
+      },
+      "title": "BudgetSpec",
+      "type": "object"
+    },
+    "EgressSpec": {
+      "additionalProperties": false,
+      "description": "Outbound connections. ``deny`` by default: an agent reaches only what is listed.",
+      "properties": {
+        "default": {
+          "enum": [
+            "deny",
+            "allow"
+          ],
+          "type": "string",
+          "default": "deny",
+          "description": "Qué pasa con un destino no listado.",
+          "title": "Default"
+        },
+        "allow": {
+          "description": "Hosts permitidos (`pypi.org`, `*.github.com`).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Allow",
+          "type": "array"
+        }
+      },
+      "title": "EgressSpec",
+      "type": "object"
+    },
+    "FilesystemSpec": {
+      "additionalProperties": false,
+      "description": "What the sandbox may see of its filesystem. Paths are inside the sandbox.",
+      "properties": {
+        "read": {
+          "description": "Rutas legibles.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Read",
+          "type": "array"
+        },
+        "write": {
+          "description": "Rutas escribibles. Siempre un subconjunto de lo legible.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Write",
+          "type": "array"
+        }
+      },
+      "title": "FilesystemSpec",
+      "type": "object"
+    },
+    "GuardrailRule": {
+      "additionalProperties": false,
+      "description": "One check applied to a piece of text at a given stage.",
+      "properties": {
+        "name": {
+          "description": "Nombre de la regla. Aparece en la traza cuando salta.",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "description": "Qué comprueba. Un tipo nuevo es código; una regla nueva es configuración.",
+          "enum": [
+            "regex_deny",
+            "keywords_deny",
+            "max_chars",
+            "pii_redact"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "action": {
+          "default": "block",
+          "description": "`block` corta, `redact` reescribe y sigue, `warn` sólo deja constancia.",
+          "enum": [
+            "block",
+            "redact",
+            "warn"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Qué se responde cuando bloquea.",
+          "title": "Message"
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Parámetros del tipo de regla (`keywords`, `patterns`, `limit`...).",
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "GuardrailRule",
+      "type": "object"
+    },
+    "GuardrailsSpec": {
+      "additionalProperties": false,
+      "description": "Guardrails grouped by the stage they run at.",
+      "properties": {
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profile"
+        },
+        "input": {
+          "items": {
+            "$ref": "#/$defs/GuardrailRule"
+          },
+          "title": "Input",
+          "type": "array"
+        },
+        "output": {
+          "items": {
+            "$ref": "#/$defs/GuardrailRule"
+          },
+          "title": "Output",
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/GuardrailRule"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "title": "GuardrailsSpec",
+      "type": "object"
+    },
+    "InferenceSpec": {
+      "additionalProperties": false,
+      "description": "Whether code inside the sandbox may call a model, and through what.",
+      "properties": {
+        "route": {
+          "default": "none",
+          "description": "`none`: sin modelo dentro. `platform`: sólo por la pasarela de la plataforma (las credenciales no entran en el sandbox). `direct`: el sandbox habla con el proveedor.",
+          "enum": [
+            "none",
+            "platform",
+            "direct"
+          ],
+          "title": "Route",
+          "type": "string"
+        }
+      },
+      "title": "InferenceSpec",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "description": "Identity of a manifest. ``name`` is the reference used everywhere else.",
+      "properties": {
+        "name": {
+          "description": "Referencia con la que se le llama desde todas partes. Minúsculas, dígitos y guiones.",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "default": "0.1.0",
+          "description": "SemVer. Es lo que se pinnea al publicar el manifiesto.",
+          "title": "Version",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "Una línea: qué hace y cuándo usarlo.",
+          "title": "Description",
+          "type": "string"
+        },
+        "owner": {
+          "default": "unassigned",
+          "description": "Equipo responsable. Aparece como label al publicar.",
+          "title": "Owner",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Etiquetas libres para buscar y agrupar.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Metadatos clave/valor para quien consuma el manifiesto.",
+          "title": "Labels",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Metadata",
+      "type": "object"
+    },
+    "ModelPricing": {
+      "additionalProperties": false,
+      "description": "What a model costs, in dollars per million tokens. Lo que `budget.max_usd` usa para contar.",
+      "properties": {
+        "input_per_mtok": {
+          "description": "Dólares por millón de tokens de entrada.",
+          "minimum": 0,
+          "title": "Input Per Mtok",
+          "type": "number"
+        },
+        "output_per_mtok": {
+          "description": "Dólares por millón de tokens de salida.",
+          "minimum": 0,
+          "title": "Output Per Mtok",
+          "type": "number"
+        }
+      },
+      "required": [
+        "input_per_mtok",
+        "output_per_mtok"
+      ],
+      "title": "ModelPricing",
+      "type": "object"
+    },
+    "ModelSpec": {
+      "additionalProperties": false,
+      "description": "Which model answers, and with what generation settings.\n\n``profile`` resolves against ``configs/models.yaml``; any field set here\noverrides the profile, so an agent can inherit a fleet-wide profile and\nstill pin one knob.",
+      "properties": {
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Perfil de configs/models.yaml del que se hereda. Lo que se ponga aquí explícito gana.",
+          "title": "Profile"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Modelo concreto. Déjalo vacío salvo que tengas un motivo: el perfil existe para no atarse a uno.",
+          "title": "Name"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "maximum": 2.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cuánto se aparta el modelo de la respuesta más probable.",
+          "title": "Temperature"
+        },
+        "top_p": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Muestreo por núcleo. Lo soportan los tres runtimes.",
+          "title": "Top P"
+        },
+        "top_k": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Muestreo por k. Gemini lo tiene; OpenAI no. Un runtime que no lo entienda lo ignora avisando.",
+          "title": "Top K"
+        },
+        "max_output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo de tokens de la respuesta.",
+          "title": "Max Output Tokens"
+        },
+        "stop_sequences": {
+          "description": "Cadenas que cortan la generación. No todos los proveedores las aplican igual.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stop Sequences",
+          "type": "array"
+        },
+        "pricing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelPricing"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Precio del modelo. Sin él, `budget.max_usd` no puede contar y se avisa al construir."
+        }
+      },
+      "title": "ModelSpec",
+      "type": "object"
+    },
+    "NetworkSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "egress": {
+          "$ref": "#/$defs/EgressSpec",
+          "description": "Conexiones salientes."
+        }
+      },
+      "title": "NetworkSpec",
+      "type": "object"
+    },
+    "PermissionSpec": {
+      "additionalProperties": false,
+      "description": "What an agent is allowed to reach.\n\nChecked twice: at build time (a denied tool is never attached) and at call\ntime by the permissions plugin (a model cannot talk its way past it).",
+      "properties": {
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Perfil de configs/permissions.yaml del que se hereda.",
+          "title": "Profile"
+        },
+        "tools": {
+          "$ref": "#/$defs/AllowDeny",
+          "description": "Qué herramientas puede alcanzar."
+        },
+        "agents": {
+          "$ref": "#/$defs/AllowDeny",
+          "description": "A qué agentes puede delegar. Lista distinta de la de herramientas, a propósito."
+        }
+      },
+      "title": "PermissionSpec",
+      "type": "object"
+    },
+    "PluginRef": {
+      "additionalProperties": false,
+      "description": "An extra runtime plugin, beyond those derived from the sections above.",
+      "properties": {
+        "ref": {
+          "description": "Plugin registrado, más allá de los que salen de guardrails/permisos/política.",
+          "title": "Ref",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Permite desactivarlo por entorno.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "config": {
+          "additionalProperties": true,
+          "description": "Configuración que recibe el plugin.",
+          "title": "Config",
+          "type": "object"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "PluginRef",
+      "type": "object"
+    },
+    "PolicySpec": {
+      "additionalProperties": false,
+      "description": "Operational limits enforced by the runtime, not by the model.",
+      "properties": {
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Perfil de configs/policies.yaml del que se hereda.",
+          "title": "Profile"
+        },
+        "max_tool_calls": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo de llamadas a herramienta por invocación.",
+          "title": "Max Tool Calls"
+        },
+        "max_llm_calls": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo de llamadas al modelo por invocación.",
+          "title": "Max Llm Calls"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tiempo máximo de una invocación, reintentos incluidos. Al pasarlo, la ejecución se corta.",
+          "title": "Timeout Seconds"
+        },
+        "retry_attempts": {
+          "default": 0,
+          "description": "Reintentos ante fallos transitorios, sólo mientras no se haya emitido nada. Un guardrail o un permiso no se reintentan.",
+          "minimum": 0,
+          "title": "Retry Attempts",
+          "type": "integer"
+        },
+        "budget": {
+          "$ref": "#/$defs/BudgetSpec",
+          "description": "Techos de coste de una invocación."
+        }
+      },
+      "title": "PolicySpec",
+      "type": "object"
+    },
+    "ProcessSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_exec": {
+          "default": true,
+          "description": "Si puede lanzar procesos. A false, sólo lee y escribe ficheros.",
+          "title": "Allow Exec",
+          "type": "boolean"
+        },
+        "max_procs": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo de procesos simultáneos.",
+          "title": "Max Procs"
+        }
+      },
+      "title": "ProcessSpec",
+      "type": "object"
+    },
+    "PromptSpec": {
+      "additionalProperties": false,
+      "description": "The agent's instructions.\n\nEither inline ``instruction`` text or ``file`` (relative to the manifest\ndirectory). ``variables`` are substituted as ``{{ name }}`` placeholders,\nwhich keeps prompt wording in configuration rather than in code.",
+      "properties": {
+        "instruction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Las instrucciones, en línea. Excluyente con `file`.",
+          "title": "Instruction"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ruta a un .md junto al manifiesto. Al resolver, su contenido pasa a `instruction`.",
+          "title": "File"
+        },
+        "global_instruction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Instrucción que también heredan los sub-agentes. Sólo la aplica el runtime adk.",
+          "title": "Global Instruction"
+        },
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Valores que sustituyen los `{{ nombre }}` del prompt.",
+          "title": "Variables",
+          "type": "object"
+        }
+      },
+      "title": "PromptSpec",
+      "type": "object"
+    },
+    "ResourceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "CPU, en unidades de Kubernetes (`500m`, `2`).",
+          "title": "Cpu"
+        },
+        "memory": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Memoria, en unidades de Kubernetes (`512Mi`).",
+          "title": "Memory"
+        },
+        "command_timeout_seconds": {
+          "default": 60,
+          "description": "Tiempo máximo de cada comando.",
+          "exclusiveMinimum": 0,
+          "title": "Command Timeout Seconds",
+          "type": "number"
+        },
+        "ttl_seconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Vida máxima del sandbox. Vacío, vive lo que la invocación.",
+          "title": "Ttl Seconds"
+        }
+      },
+      "title": "ResourceSpec",
+      "type": "object"
+    },
+    "SandboxSpec": {
+      "additionalProperties": false,
+      "description": "Where the code an agent runs is executed, and what it may reach from there.\n\nNeutral on purpose: it says *what* is isolated, not *how*. A backend\n(``local``, ``openshell``, ``k8s``...) is an installed package that turns\nthis into a container, an OpenShell policy or a pod. Without ``backend`` the\nagent has no sandbox, and tools that need one are refused at build time.",
+      "properties": {
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Perfil de configs/sandboxes.yaml del que se hereda.",
+          "title": "Profile"
+        },
+        "backend": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Quién aísla: `local`, `openshell`, `k8s`... Vacío, el agente no tiene sandbox.",
+          "title": "Backend"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Imagen base del sandbox, si el backend usa contenedores.",
+          "title": "Image"
+        },
+        "filesystem": {
+          "$ref": "#/$defs/FilesystemSpec",
+          "description": "Qué ve del sistema de ficheros."
+        },
+        "network": {
+          "$ref": "#/$defs/NetworkSpec",
+          "description": "Qué alcanza por red."
+        },
+        "process": {
+          "$ref": "#/$defs/ProcessSpec",
+          "description": "Qué procesos puede lanzar."
+        },
+        "inference": {
+          "$ref": "#/$defs/InferenceSpec",
+          "description": "Si dentro se puede llamar a un modelo."
+        },
+        "resources": {
+          "$ref": "#/$defs/ResourceSpec",
+          "description": "CPU, memoria y tiempos."
+        }
+      },
+      "title": "SandboxSpec",
+      "type": "object"
+    },
+    "SkillRef": {
+      "additionalProperties": false,
+      "description": "Una skill del catálogo enganchada a este agente.\n\nDel cuerpo de la skill no se carga nada al construir: sólo su nombre y su\ndescripción llegan al prompt, y el agente pide el resto con `skill.read` si\nle hace falta.",
+      "properties": {
+        "ref": {
+          "description": "`nombre` o `nombre@rango`, p. ej. `hexagonal-architecture@^1.0`.",
+          "title": "Ref",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Permite desengancharla por entorno.",
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "SkillRef",
+      "type": "object"
+    },
+    "SubAgentRef": {
+      "additionalProperties": false,
+      "description": "How another agent is attached to this one.\n\n``mode: tool`` wraps it as a callable tool (the coordinator keeps control);\n``mode: transfer`` attaches it as an ADK sub-agent (control can move to it).",
+      "properties": {
+        "ref": {
+          "description": "Nombre del agente delegado. Al publicar se pinnea a `nombre@X.Y.Z`.",
+          "title": "Ref",
+          "type": "string"
+        },
+        "mode": {
+          "default": "tool",
+          "description": "`tool`: el coordinador manda siempre. `transfer`: el turno pasa al hijo — sólo existe en adk.",
+          "enum": [
+            "tool",
+            "transfer"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nombre con el que el coordinador ve al delegado.",
+          "title": "Alias"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cuándo debe delegar el coordinador. Es lo que lee el modelo para decidir.",
+          "title": "Description"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Permite desactivar la delegación por entorno.",
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "SubAgentRef",
+      "type": "object"
+    },
+    "ToolRef": {
+      "additionalProperties": false,
+      "description": "A reference to a registered tool, optionally disabled per environment.",
+      "properties": {
+        "ref": {
+          "description": "Referencia registrada, p. ej. `release.next_version`. Mírales el nombre con `agentctl components`.",
+          "title": "Ref",
+          "type": "string"
+        },
+        "alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Otro nombre con el que el modelo verá la herramienta.",
+          "title": "Alias"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Ponlo a false en un overlay de entorno para quitarla sin tocar el manifiesto.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Parámetros fijos para la herramienta.",
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "ToolRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Manifiesto 'Agent' de agents.platform/v1. GENERADO desde los modelos pydantic de agent-core con 'agentctl schema' — no editar a mano.",
+  "properties": {
+    "apiVersion": {
+      "default": "agents.platform/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "Agent",
+      "default": "Agent",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/AgentBody"
+    }
+  },
+  "required": [
+    "metadata"
+  ],
+  "title": "AgentManifest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

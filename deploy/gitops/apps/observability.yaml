@@ -1,0 +1,19 @@
+# SeaweedFS (artefactos) + MLflow + collector OTel: deploy/observability tal cual,
+# el mismo kustomize que aplica `make platform`.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "0" }
+spec:
+  project: agent-platform
+  source:
+    repoURL: https://github.com/teo-devops/agent-platform.git
+    targetRevision: main
+    path: deploy/observability
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

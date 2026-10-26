@@ -1,0 +1,20 @@
+# Los namespaces de deploy/base: los mismos que crea `make cluster-up`.
+# Son recursos de clúster; el namespace de destino sólo está porque el AppProject
+# no admite destinos sin él.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: base
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-2" }
+spec:
+  project: agent-platform
+  source:
+    repoURL: https://github.com/teo-devops/agent-platform.git
+    targetRevision: main
+    path: deploy/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

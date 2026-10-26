@@ -1,0 +1,30 @@
+# app-of-apps de producción: lo único que se aplica a mano, después del AppProject.
+#
+#   kubectl apply -f deploy/gitops/bootstrap/project.yaml -f deploy/gitops/bootstrap/repositories.yaml \
+#                 -f deploy/gitops/bootstrap/root-prod.yaml
+#
+# A partir de aquí ArgoCD despliega deploy/gitops/overlays/prod desde main.
+# Lo que no vive en git y hay que crear antes: ADR 0007.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agent-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: agent-platform
+  source:
+    repoURL: https://github.com/teo-devops/agent-platform.git
+    targetRevision: main
+    path: deploy/gitops/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: { duration: 15s, factor: 2, maxDuration: 5m }
