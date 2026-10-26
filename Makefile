@@ -421,6 +421,8 @@ render:
 # deploy/gitops/overlays/lab desde GitHub. Una cosa o la otra en un clúster, no
 # las dos: ArgoCD y helm se disputarían los mismos releases.
 ARGOCD_VERSION ?= v3.5.4
+# La rama (subida) que sincroniza el lab: root-lab.yaml la lleva a todas las fuentes git.
+GITOPS_REVISION ?= main
 
 gitops-check:
 	@for o in prod lab; do kubectl kustomize deploy/gitops/overlays/$$o >/dev/null && echo "  overlay $$o: ok"; done
@@ -435,8 +437,9 @@ gitops-lab: cluster-up images
 	@$(KUBECTL) -n monitoring get secret grafana-admin >/dev/null 2>&1 || \
 	  $(KUBECTL) -n monitoring create secret generic grafana-admin \
 	    --from-literal=admin-user=admin --from-literal=admin-password="$$(openssl rand -hex 12)" >/dev/null
-	$(KUBECTL) apply -f deploy/gitops/bootstrap/project.yaml -f deploy/gitops/bootstrap/repositories.yaml \
-	  -f deploy/gitops/bootstrap/root-lab.yaml
+	$(KUBECTL) apply -f deploy/gitops/bootstrap/project.yaml -f deploy/gitops/bootstrap/repositories.yaml
+	sed 's|value: main }|value: $(GITOPS_REVISION) }|; s|targetRevision: main|targetRevision: $(GITOPS_REVISION)|' \
+	  deploy/gitops/bootstrap/root-lab.yaml | $(KUBECTL) apply -f -
 	@echo "  ArgoCD sincroniza deploy/gitops/overlays/lab. Después: make deploy (los agentes) y $(AGENTCTL) mlflow init"
 	@echo "  ArgoCD:  $(KUBECTL) -n argocd port-forward svc/argocd-server 8443:443   (admin / \$$($(KUBECTL) -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d))"
 

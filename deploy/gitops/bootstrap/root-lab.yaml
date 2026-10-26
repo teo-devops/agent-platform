@@ -1,9 +1,11 @@
 # app-of-apps del laboratorio (kind): lo mismo que root-prod.yaml, con el overlay lab.
 #
-#   make gitops-lab      # sobre `make cluster-up`: instala ArgoCD y aplica esto
+#   make gitops-lab                           # sobre `make cluster-up`: instala ArgoCD y aplica esto
+#   make gitops-lab GITOPS_REVISION=mi-rama   # prueba una rama ya subida a GitHub
 #
-# Lee de GitHub, así que despliega lo que está subido. Para probar una rama,
-# cambia targetRevision por su nombre.
+# Lee de GitHub, así que despliega lo que está subido. Los parches llevan la misma
+# revisión a las fuentes git de las Applications hijas (no a los charts, cuya
+# targetRevision es su versión): sin ellos, una rama leería sus values de main.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -17,6 +19,14 @@ spec:
     repoURL: https://github.com/teo-devops/agent-platform.git
     targetRevision: main
     path: deploy/gitops/overlays/lab
+    kustomize:
+      patches:
+        - target: { kind: Application, name: "base|observability|kagent-ui-lab" }
+          patch: |-
+            - { op: replace, path: /spec/source/targetRevision, value: main }
+        - target: { kind: Application, name: "monitoring|kagent" }
+          patch: |-
+            - { op: replace, path: /spec/sources/1/targetRevision, value: main }
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
