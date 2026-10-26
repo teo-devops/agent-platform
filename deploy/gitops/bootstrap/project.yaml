@@ -19,6 +19,8 @@ spec:
     - { server: https://kubernetes.default.svc, namespace: kagent }
     - { server: https://kubernetes.default.svc, namespace: observability }
     - { server: https://kubernetes.default.svc, namespace: monitoring }
+    # kube-prometheus-stack crea ahí los Services con los que mide el plano de control.
+    - { server: https://kubernetes.default.svc, namespace: kube-system }
   # Los charts instalan CRDs, ClusterRoles y webhooks: hacen falta recursos de clúster.
   clusterResourceWhitelist:
     - { group: "*", kind: "*" }

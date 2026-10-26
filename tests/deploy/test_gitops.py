@@ -45,8 +45,9 @@ def test_every_application_stays_inside_the_project(app):
     assert app["spec"]["project"] == PROJECT["metadata"]["name"]
     for source in _sources(app):
         assert source["repoURL"] in allowed, f"{source['repoURL']} no está en sourceRepos del AppProject"
+    # Sin namespace, ArgoCD la rechaza (InvalidSpecError): el AppProject no lo admite.
     namespace = app["spec"]["destination"].get("namespace")
-    assert namespace is None or namespace in namespaces, f"destino {namespace} no permitido"
+    assert namespace in namespaces, f"destino {namespace!r} no permitido"
 
 
 @pytest.mark.parametrize("app", APPS, ids=lambda a: a["metadata"]["name"])
