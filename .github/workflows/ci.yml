@@ -42,7 +42,7 @@ jobs:
       - name: GitOps overlays render
         run: make gitops-check
       - name: Generated docs are up to date
-        run: make docs && git diff --exit-code docs/configuration.md
+        run: make docs && git diff --exit-code docs/configuration.md README.md
 
   images:
     runs-on: ubuntu-latest

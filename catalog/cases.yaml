@@ -1,0 +1,98 @@
+# Los casos de uso del catálogo: UN sitio para todos.
+#
+# De aquí salen `make casos` (el menú), `make caso-N` (cada caso), `agentctl
+# catalog` (en qué casos aparece cada agente) y la tabla de casos del README
+# (`make docs`; un test comprueba que está al día). Para añadir un caso, una
+# entrada aquí y `make docs`: nada más.
+#
+#   id        el número de `make caso-N`
+#   agent     el agente o workflow que recibe el mensaje
+#   summary   una línea, para el menú
+#   shows     qué colaboración enseña (la columna del README; admite markdown)
+#   message   el mensaje de ejemplo; MSG="..." lo sustituye
+#   env       el entorno con el que se ejecuta (por defecto, el de siempre)
+#   remote    en vez de construir el agente, hablarle por A2A en esta URL
+#   requires  targets de make que el caso necesita antes (los lanza `make caso-N`)
+#   ui        dónde verlo también, en pantalla
+#   tip       una variación que merece la pena probar
+
+cases:
+  - id: 1
+    agent: tech-explainer
+    summary: un agente solo, explica un concepto técnico
+    shows: "`tech-explainer`: ninguna, un modelo con instrucciones"
+    message: ¿Qué es una API REST?
+    ui: make dev-adk AGENT=tech-explainer
+
+  - id: 2
+    agent: release-manager
+    summary: un agente con tools, de los commits a la versión y sus notas
+    shows: "`release-manager`: un agente que llama a **tools** (código Python): la versión la calcula una función, no el modelo"
+    message: "Versión actual: 1.4.2. Commits: feat(api): paginación en /orders · fix: cierre de conexiones al reiniciar · refactor!: elimina /v1/orders"
+    ui: make dev-adk AGENT=release-manager  (pestaña Events)
+
+  - id: 3
+    agent: software-manager
+    summary: delega en un desarrollador y un revisor (lo decide el modelo)
+    shows: "`software-manager`: **delegación decidida por el modelo**. El jefe llama a `python-developer` y a `code-reviewer`, y si la revisión encuentra un fallo, vuelve al desarrollador"
+    message: Una función que valide un IBAN español
+    ui: make dev-adk AGENT=software-manager  (Events)
+    tip: make caso-3 RUNTIME=langgraph
+
+  - id: 4
+    agent: tech-article
+    summary: flujo secuencial, investigar y redactar (lo decide el YAML)
+    shows: "`tech-article`: **flujo secuencial**, investigar y redactar. El orden lo fija el YAML, no el modelo"
+    message: Qué es el protocolo A2A, explicado para desarrolladores junior
+    ui: make dev-langgraph  (el grafo)
+
+  - id: 5
+    agent: tech-briefing
+    summary: en paralelo, una tecnología para dos audiencias
+    shows: "`tech-briefing`: **en paralelo**, una tecnología para dos audiencias (equipo y dirección)"
+    message: Adoptar Kubernetes operators para nuestras bases de datos
+    ui: make dev-langgraph  (las dos ramas)
+
+  - id: 6
+    agent: review-loop
+    summary: bucle desarrollador <-> revisor
+    shows: "`review-loop`: **bucle** desarrollador ↔ revisor, dos vueltas"
+    message: Una función que invierta una cadena
+    ui: make dev-langgraph  (el bucle)
+
+  - id: 7
+    agent: software-manager
+    summary: el caso 3 por A2A, cada sub-agente en su proceso y framework
+    shows: "El 3 por **A2A**: cada sub-agente en **su proceso y su framework**"
+    message: Una función que calcule la mediana de una lista de números
+    env: local-a2a
+    requires: [a2a-ensure]
+    ui: make a2a-up  (su terminal; o tail -f .agent-platform/a2a.log si los levantó make)
+
+  - id: 8
+    agent: data-consumer
+    summary: dos organizaciones hablando por A2A (dataspace)
+    shows: "`data-consumer` → `data-provider`: **dos organizaciones** por A2A. B pregunta a A qué datos tiene y decide si su política permite el uso"
+    message: Datos de movilidad en bicicleta para un producto comercial
+    env: local-a2a
+    requires: [a2a-ensure]
+    ui: make a2a-up  (su terminal; o tail -f .agent-platform/a2a.log si los levantó make)
+    tip: make caso-8 MSG='Datos de movilidad en bicicleta para investigación'
+
+  - id: 9
+    agent: software-manager
+    summary: el caso 3 en kagent, A2A entre pods (necesita make lab)
+    shows: "`software-manager` en **kagent**: A2A entre **pods**. El mensaje entra por el controlador de kagent"
+    message: Una función que valide un IBAN español
+    remote: http://localhost:8083/api/a2a/kagent/software-manager/
+    requires: [kagent-a2a]
+    ui: http://localhost:8082/agents/kagent/software-manager/chat
+
+  - id: 10
+    agent: python-executor
+    summary: escribe código y lo EJECUTA en un sandbox aislado (Docker)
+    shows: "`python-executor`: escribe el código y **lo ejecuta en un sandbox** antes de responder. El proveedor lo elige el entorno: `ENV=sandbox-sbx` (microVM de Docker Sandboxes) o `ENV=sandbox-openshell` (NVIDIA OpenShell); sin `ENV`, un contenedor local"
+    message: Una función que calcule la mediana de una lista de números
+    requires: [sandbox-image]
+    ui: docker ps --filter label=agent-platform.sandbox=local  (mientras corre)
+    tip: make caso-10 ENV=sandbox-sbx

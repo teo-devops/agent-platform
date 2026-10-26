@@ -28,8 +28,18 @@ recibe un requisito, lo delega en un desarrollador (`python-developer`) y pasa e
 resultado a un revisor (`code-reviewer`) que fundamenta sus hallazgos con
 análisis estático servido por MCP.
 
-> ¿Primera vez? Mira los diagramas de [Arquitectura](#arquitectura) y sigue por
-> [Explora los casos de uso](#explora-los-casos-de-uso), que no necesita clúster. Para entender el porqué: [`docs/concepts.md`](docs/concepts.md)
+> ¿Primera vez? Cuatro comandos:
+>
+> ```bash
+> make install && cp .env.example .env   # y pon tu GOOGLE_API_KEY
+> make doctor                            # ¿falta algo?
+> make casos                             # el menú de casos de uso; make caso-1 para empezar
+> make status                            # qué está levantado y cómo levantar lo que no
+> ```
+>
+> `make help` es la misma guía en la terminal. Después, los diagramas de
+> [Arquitectura](#arquitectura) y [Explora los casos de uso](#explora-los-casos-de-uso),
+> que no necesita clúster. Para entender el porqué: [`docs/concepts.md`](docs/concepts.md)
 > (framework vs runtime vs protocolo, con el diagrama del flujo). Para presentarlo:
 > el guion de [`docs/demo.md`](docs/demo.md).
 
@@ -333,14 +343,14 @@ y `cluster-up.sh` lo comprueban antes de arrancar.
 
 ### 9. Carriles y puertos
 
-| Carril | Se levanta con | Puertos del host |
-|---|---|---|
-| Local | `make dev-adk` · `dev-langgraph` · `mcp` · `mcp-inspector` | 8000 · 2024 · 8001 · 6274 |
-| A2A local | `make a2a-up` | 9101 · 9102 · 9103 |
-| MLflow sin clúster | `make mlflow-local` | 5500 |
-| Clúster | `make lab` | 8082 (kagent) · 5500 (MLflow) · 9901 (SeaweedFS) · 5001 (registro) · 8083 (`make kagent-a2a`) |
+Cada servicio, su puerto y cómo se levanta están en un solo sitio,
+[`deploy/services.yaml`](deploy/services.yaml): de ahí salen `make status` y la
+tabla de [Las UIs](#las-uis). Los puertos de los agentes A2A, en
+[`configs/environments/local-a2a.yaml`](configs/environments/local-a2a.yaml):
+`agentctl a2a serve` escucha en el puerto que dice ese fichero, así que el
+coordinador nunca llama a un agente por otro.
 
-Los carriles local y clúster no comparten puertos salvo el 5500, que es a
+Los carriles local y clúster no comparten puertos salvo el 5500 (MLflow), que es a
 propósito. Todo lo que habla con Kubernetes va contra el contexto
 `kind-agent-lab`, nunca contra el contexto activo de `kubectl`.
 
@@ -360,18 +370,27 @@ catalog/agents/engineering/release-manager/
     └── judges.yaml
 ```
 
-| Dominio | Agente | Para qué lo usarías | Tools | Caso |
+<!-- BEGIN GENERADO: catálogo (make docs, desde los agent.yaml y catalog/cases.yaml) -->
+| Dominio | Agente | Para qué es | Usa | Casos |
 |---|---|---|---|---|
-| technology | `tech-explainer` | Explicar un concepto técnico a negocio en tres frases | — | 1, 5 |
-| technology | `tech-researcher` | Preparar notas para decidir sobre una tecnología: alternativas, riesgos, preguntas | — | 4, 5 |
-| media | `tech-writer` | Convertir esas notas en un artículo del blog de ingeniería | `text.*` | 4 |
-| engineering | `release-manager` | De los commits a la siguiente versión semver y sus notas de release | `release.*`, `time.now` | 2 |
-| engineering | `software-manager` | Coordinar desarrollo y revisión de un requisito | delega | 3, 7, 9 |
-| engineering | `python-developer` | Escribir una función tipada y documentada | `code.check_syntax` | 3, 6, 7 |
-| engineering | `code-reviewer` | Revisar código con análisis estático real | `code.*` | 3, 6, 7 |
-| engineering | `python-executor` | Escribir código **y ejecutarlo** con sus tests en un sandbox | `sandbox.*` | 10 |
-| dataspace | `data-provider` · `data-consumer` | Dos organizaciones: una ofrece datos, la otra comprueba si su política permite el uso | `dataspace.*` · delega | 8 |
-| platform | `eval-judge` | Interno: el juez de las evals. No es una demo | — | — |
+| dataspace | `data-consumer` | Organización B. Busca datos en la organización A y comprueba si su política permite el uso que se pide. | delega en `data-provider` | 8 |
+| dataspace | `data-provider` | Organización A. Ofrece sus datasets y la política de uso de cada uno. | `dataspace.*` | 8 |
+| engineering | `code-reviewer` | Revisa código Python con análisis estático; informa de bugs, smells y riesgos. | `code.*` · skill `hexagonal-architecture` | 3, 6, 7, 9 |
+| engineering | `python-developer` | Escribe funciones Python limpias, tipadas y documentadas a partir de un requisito. | `code.*` · skill `hexagonal-architecture` | 3, 6, 7, 9 |
+| engineering | `python-executor` | Escribe código Python y lo EJECUTA en un sandbox aislado, con sus tests, antes de responder. | `code.*` · sandbox | 10 |
+| engineering | `release-manager` | A partir de los commits desde la última versión, decide la siguiente (semver) y redacta las notas de release. | `release.*`, `time.*` | 2 |
+| engineering | `software-manager` | Coordina a un desarrollador y a un revisor para entregar código Python revisado. | delega en `python-developer`, `code-reviewer` | 3, 7, 9 |
+| media | `tech-writer` | Convierte notas técnicas en un artículo para el blog de ingeniería, legible y sin perder rigor. | `text.*` | 4 |
+| platform | `eval-judge` | Juez de las evals — decide si una respuesta cumple un criterio y dice por qué. Interno de la plataforma. | — | — |
+| technology | `tech-explainer` | Explica un concepto técnico en lenguaje claro, en tres frases, para quien no es especialista. | — | 1, 5 |
+| technology | `tech-researcher` | Prepara notas técnicas sobre una tecnología — qué es, alternativas, riesgos y preguntas abiertas — para quien tiene que decidir o escribir. | — | 4, 5 |
+| workflow · loop | `review-loop` | Bucle desarrollador ↔ revisor — escribe, revisa y corrige hasta agotar las vueltas. | `python-developer` → `code-reviewer` | 6 |
+| workflow · sequential | `tech-article` | De un tema a un artículo para el blog de ingeniería. El orden lo fija el YAML, no el modelo. | `tech-researcher` → `tech-writer` | 4 |
+| workflow · parallel | `tech-briefing` | Una tecnología, dos audiencias a la vez — notas para el equipo técnico y una explicación para dirección. | `tech-researcher` → `tech-explainer` | 5 |
+<!-- END GENERADO: catálogo -->
+
+`make catalog` (o `agentctl catalog`) enseña lo mismo en la terminal, con la
+skill, el sandbox y el comando para probar cada agente.
 
 Todos tienen su suite en `evals/` (`make eval` la valida; un test impide añadir
 un agente sin ella). Y tres workflows que componen esos mismos agentes: `tech-article` (investigar →
@@ -384,26 +403,33 @@ como paso de un flujo.
 ```bash
 make install                   # .venv con todos los paquetes
 cp .env.example .env           # pon tu GOOGLE_API_KEY
+make doctor                    # comprueba que no falta nada
 make casos                     # el menú: qué caso es cada número
 make caso-3                    # y a jugar
 ```
+
+Los casos viven en [`catalog/cases.yaml`](catalog/cases.yaml): agente, mensaje de
+ejemplo, entorno, lo que necesitan antes y dónde verlos. Añadir uno es una entrada
+ahí y `make docs`; ni el Makefile ni esta tabla se tocan a mano.
 
 Cada caso añade **una** forma de colaborar a la anterior. Todos narran en la
 terminal el trabajo que la respuesta final esconde: quién delega en quién, qué
 tools llama cada uno y qué viaja por A2A.
 
+<!-- BEGIN GENERADO: casos (make docs, desde catalog/cases.yaml) -->
 | # | Pruébalo | Qué colaboración ves | Míralo también en una UI |
 |---|---|---|---|
 | 1 | `make caso-1` | `tech-explainer`: ninguna, un modelo con instrucciones | `make dev-adk AGENT=tech-explainer` |
-| 2 | `make caso-2` | `release-manager`: un agente que llama a **tools** (código Python): la versión la calcula una función, no el modelo | `make dev-adk AGENT=release-manager` (pestaña *Events*) |
-| 3 | `make caso-3` | `software-manager`: **delegación decidida por el modelo**. El jefe llama a `python-developer` y a `code-reviewer`, y si la revisión encuentra un fallo, vuelve al desarrollador | `make dev-adk AGENT=software-manager` |
+| 2 | `make caso-2` | `release-manager`: un agente que llama a **tools** (código Python): la versión la calcula una función, no el modelo | `make dev-adk AGENT=release-manager` (pestaña Events) |
+| 3 | `make caso-3` | `software-manager`: **delegación decidida por el modelo**. El jefe llama a `python-developer` y a `code-reviewer`, y si la revisión encuentra un fallo, vuelve al desarrollador | `make dev-adk AGENT=software-manager` (Events) |
 | 4 | `make caso-4` | `tech-article`: **flujo secuencial**, investigar y redactar. El orden lo fija el YAML, no el modelo | `make dev-langgraph` (el grafo) |
-| 5 | `make caso-5` | `tech-briefing`: **en paralelo**, una tecnología para dos audiencias (equipo y dirección) | `make dev-langgraph` |
-| 6 | `make caso-6` | `review-loop`: **bucle** desarrollador ↔ revisor, dos vueltas | `make dev-langgraph` |
-| 7 | `make caso-7` | El 3 por **A2A**: cada sub-agente en **su proceso y su framework** | La terminal de `make a2a-up` |
-| 8 | `make caso-8` | `data-consumer` → `data-provider`: **dos organizaciones** por A2A. B pregunta a A qué datos tiene y decide si su política permite el uso | La terminal de `make a2a-up` |
-| 9 | `make lab` | `software-manager` en **kagent**: A2A entre **pods** | El [chat del jefe](http://localhost:8082/agents/kagent/software-manager/chat) en kagent |
-| 10 | `make caso-10` | `python-executor`: escribe el código y **lo ejecuta en un sandbox** antes de responder. El proveedor lo elige el entorno: `ENV=sandbox-sbx` (microVM de Docker Sandboxes) o `ENV=sandbox-openshell` (NVIDIA OpenShell); sin `ENV`, un contenedor local | `sbx ls` · `docker ps --filter label=agent-platform.sandbox=local` |
+| 5 | `make caso-5` | `tech-briefing`: **en paralelo**, una tecnología para dos audiencias (equipo y dirección) | `make dev-langgraph` (las dos ramas) |
+| 6 | `make caso-6` | `review-loop`: **bucle** desarrollador ↔ revisor, dos vueltas | `make dev-langgraph` (el bucle) |
+| 7 | `make caso-7` | El 3 por **A2A**: cada sub-agente en **su proceso y su framework** | `make a2a-up` (su terminal; o tail -f .agent-platform/a2a.log si los levantó make) |
+| 8 | `make caso-8` | `data-consumer` → `data-provider`: **dos organizaciones** por A2A. B pregunta a A qué datos tiene y decide si su política permite el uso | `make a2a-up` (su terminal; o tail -f .agent-platform/a2a.log si los levantó make) |
+| 9 | `make caso-9` | `software-manager` en **kagent**: A2A entre **pods**. El mensaje entra por el controlador de kagent | El [chat de `software-manager`](http://localhost:8082/agents/kagent/software-manager/chat) en kagent |
+| 10 | `make caso-10` | `python-executor`: escribe el código y **lo ejecuta en un sandbox** antes de responder. El proveedor lo elige el entorno: `ENV=sandbox-sbx` (microVM de Docker Sandboxes) o `ENV=sandbox-openshell` (NVIDIA OpenShell); sin `ENV`, un contenedor local | `docker ps --filter label=agent-platform.sandbox=local` (mientras corre) |
+<!-- END GENERADO: casos -->
 
 Para jugar con cualquiera:
 
@@ -414,13 +440,14 @@ make caso-8 MSG="Datos de movilidad en bicicleta para investigación"       # mi
 ```
 
 Cada caso imprime primero el comando `agentctl` que ejecuta, así que de paso lo
-aprendes. Para usar `agentctl` directamente, `source .venv/bin/activate` (sin eso,
+aprendes (sin make: `agentctl case 3`). Para usar `agentctl` directamente, `source .venv/bin/activate` (sin eso,
 `command not found`). En resumen: `make` para enseñar, `agentctl` para lo que
 `make` no cubre (`show`, `validate`, `a2a send`...), y las UIs para verlo en pantalla.
 
-**Los casos A2A (7 y 8) se montan solos.** Si los sub-agentes no están escuchando,
-`make` los levanta en segundo plano (log en `.agent-platform/a2a.log`; se paran
-con `make a2a-down`). Para una demo, mejor verlos: `make a2a-up` en una terminal y
+**Lo que un caso necesita se monta solo.** El 7 y el 8 levantan en segundo plano
+los sub-agentes A2A que no respondan (log en `.agent-platform/a2a.log`; se paran
+con `make a2a-down`), el 9 abre el port-forward al controlador de kagent y el 10
+construye la imagen del sandbox. `make status` dice qué quedó levantado. Para una demo, mejor verlos: `make a2a-up` en una terminal y
 `make caso-7` en otra, una al lado de la otra.
 
 El 3 y el 7 son el mismo agente y el mismo manifiesto. Así se ve el 7 (real,
@@ -516,28 +543,53 @@ salto es A2A: nadie construye copias de los hijos dentro de su pod.
 
 ## Las UIs
 
+`make status` dice, en vivo, qué está levantado: ✓ con su URL (y las credenciales,
+si las tiene) o ✗ con el comando que lo levanta. `make ui-urls` añade las
+sub-páginas de cada UI: las trazas, los prompts o el chat de cada agente.
+`make down` para todo lo que los `make` dejaron corriendo en local; el clúster no
+se toca.
+
+```text
+Local — sin clúster
+  ✓ ADK Dev UI             http://localhost:8000/dev-ui/                parar: make down
+  ✗ LangGraph Studio       —                                            make dev-langgraph · make dev-langchain
+  ✓ Agentes A2A            8/8 responden  :9101-9108                    make a2a-cards · parar: make a2a-down
+  ✓ Langflow               http://127.0.0.1:7860                        admin / la clave de make langflow-url
+  ✓ MLflow                 http://localhost:5500                        no lo levantó make: otra terminal o el clúster
+
+Clúster — kind-agent-lab  lo gestiona helm (make lab)
+  ✓ kagent                 http://localhost:8082                        3/3 agentes Ready
+  ✗ A2A de kagent          desplegado, pero no responde                 make kagent-a2a
+```
+
+<!-- BEGIN GENERADO: uis (make docs, desde deploy/services.yaml) -->
 | UI | URL | Se levanta con | Para qué |
 |---|---|---|---|
-| **kagent** | http://localhost:8082 | `make lab` | Chatear con los agentes desplegados |
-| └ chat de `software-manager` | http://localhost:8082/agents/kagent/software-manager/chat | | El jefe de desarrollo: orquesta a los otros dos por A2A |
-| └ chat de `code-reviewer` | http://localhost:8082/agents/kagent/code-reviewer/chat | | Revisor declarativo: tools `code.*` por MCP + skill |
-| └ chat de `python-developer` | http://localhost:8082/agents/kagent/python-developer/chat | | Desarrollador BYO (LangGraph dentro de kagent) |
-| **Langflow** | http://127.0.0.1:7860 | `make langflow-up` (+ `make a2a-catalog`) | La consola: flujos generados del catálogo (`agentctl langflow export`) que llaman a los agentes por A2A. [Evaluación](docs/control-plane.md) |
-| **MLflow** | http://localhost:5500 | `make lab` o `make mlflow-local` | Backend de AgentOps |
-| └ Trazas | http://localhost:5500/#/experiments/0/traces | | Una traza por pregunta, con `agent.*` y `prompt.*` |
-| └ Versiones de agente | http://localhost:5500/#/experiments/0/models | | Un `LoggedModel` por `nombre@versión` |
-| └ Prompts | http://localhost:5500/#/prompts | | Prompt Registry: una versión por texto distinto |
-| └ Runs (evals, métricas) | http://localhost:5500/#/experiments/0/runs | | `make eval-run`, `make metrics` |
-| **SeaweedFS** | http://localhost:9901 | `make lab` | Artefactos de MLflow (`seaweedadmin` / `seaweedadmin`) |
-| **ADK Dev UI** | http://localhost:8000/dev-ui/?app=python_developer | `make dev-adk` | Playground de ADK, 100 % local: todo el catálogo en el desplegable, con guardrails y permisos activos |
-| **LangGraph Studio** | https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024 | `make dev-langgraph` · `make dev-langchain` | El grafo de cada agente; la UI se sirve desde smith.langchain.com |
+| **ADK Dev UI** | http://localhost:8000/dev-ui/ | `make dev-adk` | Playground de ADK, 100 % local: todo el catálogo en el desplegable, con guardrails y permisos activos |
+| **LangGraph Studio** | https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024 | `make dev-langgraph` · `make dev-langchain` | El grafo de cada agente; la UI se sirve desde smith.langchain.com. Studio sirve LangGraph y LangChain: uno cada vez |
 | └ API de LangGraph | http://127.0.0.1:2024/docs | | La misma API, sin la UI remota |
-| **MCP** (`catalog-tools`) | http://localhost:8001/ | `make mcp` | Qué publica el servidor. El endpoint del protocolo es `/mcp`: para clientes MCP (IDE, Inspector), no para el navegador |
-| **Agentes A2A** (local) | http://localhost:9101/.well-known/agent-card.json · :9102 | `make a2a-up` | La tarjeta de cada sub-agente; `make a2a-cards` las imprime |
-| **MCP Inspector** | la URL con token que imprime al arrancar (`http://127.0.0.1:6274?MCP_INSPECTOR_API_TOKEN=…`) | `make mcp` + `make mcp-inspector` | UI oficial de MCP: lista las tools y las llama con argumentos a mano |
+| **MCP (catalog-tools)** | http://localhost:8001/ | `make mcp` | Qué publica el servidor. El endpoint del protocolo es /mcp: para clientes MCP (IDE, Inspector), no para el navegador |
+| **MCP Inspector** | http://localhost:6274 | `make mcp-inspector` | UI oficial de MCP, sobre make mcp: lista las tools y las llama a mano. Ábrelo con la URL con token que imprime |
+| **Agentes A2A** | http://127.0.0.1:9101/.well-known/agent-card.json … :9108 | `make a2a-up` · `make a2a-catalog` | Un proceso por agente, en el puerto que dice configs/environments/local-a2a.yaml. make a2a-cards los sondea |
+| **Langflow** | http://127.0.0.1:7860 | `make langflow-up` | La consola: flujos generados del catálogo con agentctl langflow export, que llaman a los agentes por A2A (make a2a-catalog) (admin / la clave de make langflow-url) |
+| **MLflow** | http://localhost:5500 | `make mlflow-local` · `make lab` | Backend de AgentOps. El mismo puerto en los dos carriles: el del clúster o, sin clúster, make mlflow-local |
+| └ Trazas | http://localhost:5500/#/experiments/0/traces | | Una traza por pregunta, con agent.* y prompt.* |
+| └ Versiones de agente | http://localhost:5500/#/experiments/0/models | | Un LoggedModel por nombre@versión |
+| └ Prompts | http://localhost:5500/#/prompts | | Prompt Registry: una versión por texto distinto |
+| └ Runs (evals, métricas) | http://localhost:5500/#/experiments/0/runs | | make eval-run, make metrics |
+| **kagent** | http://localhost:8082 | `make lab` | Chatear con los agentes desplegados |
+| └ chat de software-manager | http://localhost:8082/agents/kagent/software-manager/chat | | El jefe de desarrollo: orquesta a los otros dos por A2A (make caso-9) |
+| └ chat de code-reviewer | http://localhost:8082/agents/kagent/code-reviewer/chat | | Revisor declarativo: tools code.* por MCP + skill |
+| └ chat de python-developer | http://localhost:8082/agents/kagent/python-developer/chat | | Desarrollador BYO (LangGraph dentro de kagent) |
+| **A2A de kagent** | http://localhost:8083/api/a2a/kagent/software-manager/ | `make kagent-a2a` | El controlador atiende A2A para todos los agentes del clúster (port-forward) |
+| **SeaweedFS** | http://localhost:9901 | `make lab` | Artefactos de MLflow (seaweedadmin / seaweedadmin) |
+| **Registro de imágenes** | http://localhost:5001/v2/_catalog | `make cluster-up` | Las imágenes de agent-host, mcp, mlflow y las skills (make images) |
+| **ArgoCD** | https://localhost:8443 | `make argocd` | Qué sincroniza ArgoCD de deploy/gitops/overlays/lab (port-forward) (admin / la clave que imprime make argocd) · sólo con `make gitops-lab` |
+| **Grafana** | http://localhost:3000 | `make grafana` | Salud del clúster y de los pods (Prometheus). Las trazas de los agentes siguen en MLflow (admin / la clave que imprime make grafana) · sólo con `make gitops-lab` |
+<!-- END GENERADO: uis -->
 
-`make ui-urls` imprime esta lista. Los tres playgrounds locales comparten
-puertos entre sí (Studio sirve LangGraph y LangChain): abre uno cada vez.
+Los tres playgrounds locales comparten puertos entre sí (Studio sirve LangGraph y
+LangChain): abre uno cada vez.
 
 ---
 
@@ -563,6 +615,7 @@ agent-platform/
 │   ├── agents/<dominio>/<nombre>/   technology · media · engineering · dataspace · platform
 │   │                                agent.yaml + prompt.md + evals/ (si se mide)
 │   ├── workflows/*.yaml
+│   ├── cases.yaml                   los casos de uso: make casos, make caso-N, la tabla de arriba
 │   ├── skills/<nombre>/SKILL.md     instrucciones que el agente lee bajo demanda
 │   └── tools/*.py                   funciones sueltas: soltar un .py y ya
 ├── configs/                   perfiles (modelos, guardrails, permisos, políticas, sandboxes) y entornos
@@ -573,7 +626,8 @@ agent-platform/
 │   ├── kagent/                values de Helm y release.yaml (qué agentes, en qué modo)
 │   ├── gitops/                ArgoCD: app-of-apps y overlays prod · lab (ADR 0007)
 │   ├── images/                Dockerfiles: agent-host, mcp, mlflow, skill
-│   └── scripts/
+│   ├── services.yaml          cada servicio y UI: make status, make down, la tabla de UIs
+│   └── scripts/               cluster-up · doctor (make doctor) · stack (make status / down)
 │
 ├── schemas/                   el JSON Schema de agent y workflow (make schema; un test lo vigila)
 ├── docs/                      strategy · concepts · demo · architecture · configuration · adr/
@@ -589,9 +643,12 @@ agent-platform/
 ```bash
 make install                   # .venv con todos los paquetes en modo editable
 cp .env.example .env           # GOOGLE_API_KEY (Gemini)
+make doctor                    # herramientas, clave y estado del clúster
 source .venv/bin/activate      # para usar agentctl directamente; los `make` no lo necesitan
 make test                      # ninguno llama al modelo
 ```
+
+`make status` en cualquier momento, y `make down` para parar lo local.
 
 ### Carril local — un manifiesto, tres frameworks
 
@@ -614,22 +671,29 @@ el caso corre igual y te lo dice al final.
 ### Carril clúster — kagent + MLflow
 
 ```bash
-make lab                       # kind + registro local + MLflow/SeaweedFS/collector + kagent + agentes
-make status
+make lab                       # doctor + kind + registro + MLflow/SeaweedFS/collector + kagent + agentes, y status
+make caso-9                    # el caso 3 contra kagent, por A2A entre pods
+make cluster-status            # agentes, servidor MCP y pods, según kubectl
 ```
 
 Tras cambiar un agente: `make deploy` (registra el prompt, regenera los CRDs,
 aplica y registra la versión del agente). Para borrarlo todo: `make cluster-down`.
 
 Con ArgoCD en vez de helm: `make gitops-lab` sincroniza `deploy/gitops/overlays/lab`
-desde GitHub; en producción se aplica `deploy/gitops/bootstrap/root-prod.yaml`
-(qué crear antes y qué queda fuera: [ADR 0007](docs/adr/0007-gitops-absorbe-genai-platform.md)).
+desde GitHub y, además de lo de `make lab`, trae Prometheus y Grafana
+(`make argocd` y `make grafana` abren sus UIs con la clave). Un clúster lo gestiona
+helm o ArgoCD, nunca los dos: `make doctor` lo comprueba y `make lab`,
+`make platform` y `make gitops-lab` se niegan a mezclarlos. En producción se aplica
+`deploy/gitops/bootstrap/root-prod.yaml` (qué crear antes y qué queda fuera:
+[ADR 0007](docs/adr/0007-gitops-absorbe-genai-platform.md)).
 
 ---
 
 ## `agentctl`
 
 ```bash
+agentctl catalog                                        # por dominio: para qué es cada agente y cómo probarlo
+agentctl case [N] [-m "..."]                            # los casos de catalog/cases.yaml (lo que llama make caso-N)
 agentctl list | show <agente> | validate | components
 agentctl run software-manager -v -m "Una función que valide un IBAN español"   # -v: narra el trabajo
 agentctl --runtime langgraph run python-developer -m "..."   # el MISMO manifiesto, otro framework
@@ -640,7 +704,7 @@ agentctl export --all -o <dir>                          # forma resuelta, para u
 agentctl schema                                         # el JSON Schema, generado de los modelos
 
 agentctl mcp list | serve                               # agent-mcp
-agentctl a2a serve <agente[:framework]>... | card <url> | send <url> -m "..."   # agent-a2a
+agentctl a2a serve <agente[:framework]>... | ping | card <url> | send <url> -m "..."   # agent-a2a
 agentctl kagent render | host                           # agent-kagent
 agentctl mlflow init | prompts | register | sync | metrics   # agent-mlflow
 ```
