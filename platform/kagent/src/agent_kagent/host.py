@@ -6,6 +6,12 @@ port 8080 and reads ``KAGENT_URL``, ``KAGENT_NAME`` and ``KAGENT_NAMESPACE``
 feeds it the graph the platform builds from the manifest — the same graph
 ``agentctl run`` and LangGraph Studio use, guardrails and permissions included.
 
+Gemini answers with a list of content blocks — the text plus a thought
+signature — once a tool has been called. kagent's converter only publishes an
+``AIMessage`` whose content is a ``str``, so the agent's actual answer was
+dropped and the task ended with nothing but the tool's output. :class:`TextAnswers`
+hands kagent the text of each answer instead; the graph's own state is untouched.
+
 Tracing: kagent's SDK installs the OpenTelemetry provider (OTLP gRPC to the
 collector). The platform is loaded with ``tracing=False`` and configured after
 that, so it reuses kagent's provider and only adds the ``agent.*`` attributes
@@ -47,6 +53,43 @@ def agent_card(manifest: Any, *, url: str) -> dict[str, Any]:
     }
 
 
+class TextAnswers:
+    """The compiled graph, with each answer's content flattened to its text for kagent.
+
+    kagent's executor only calls ``astream(..., stream_mode="updates")``, so
+    that is the one method that changes; everything else is the graph's own.
+    """
+
+    def __init__(self, graph: Any) -> None:
+        self._graph = graph
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._graph, name)
+
+    async def astream(self, *args: Any, **kwargs: Any):
+        async for event in self._graph.astream(*args, **kwargs):
+            yield _flatten(event)
+
+
+def _flatten(event: Any) -> Any:
+    if not isinstance(event, dict):
+        return event
+    flat = {}
+    for node, data in event.items():
+        if isinstance(data, dict) and isinstance(data.get("messages"), list):
+            data = {**data, "messages": [_as_text(m) for m in data["messages"]]}
+        flat[node] = data
+    return flat
+
+
+def _as_text(message: Any) -> Any:
+    from langchain_core.messages import AIMessage
+
+    if isinstance(message, AIMessage) and not isinstance(message.content, str):
+        return message.model_copy(update={"content": message.text})
+    return message
+
+
 def build_app(name: str, *, runtime: str, environment: str | None = None) -> Any:
     """The FastAPI app kagent's controller will route A2A traffic to."""
     if runtime not in SUPPORTED_RUNTIMES:
@@ -67,7 +110,7 @@ def build_app(name: str, *, runtime: str, environment: str | None = None) -> Any
     config = KAgentConfig()
     url = f"http://{name}.{os.getenv('KAGENT_NAMESPACE', 'kagent')}:{BYO_PORT}"
     app = KAgentApp(
-        graph=factory.runtime(runtime).app(result),
+        graph=TextAnswers(factory.runtime(runtime).app(result)),
         agent_card=agent_card(result.manifest, url=url),
         config=config,
         tracing=os.getenv("OTEL_TRACING_ENABLED", "false").lower() == "true",

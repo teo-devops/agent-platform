@@ -361,3 +361,93 @@ async def test_a_failure_is_not_remembered():
     with pytest.raises(RuntimeError):
         await seen.run("m-1", flaky)
     assert await seen.run("m-1", flaky) == ("bien", False)
+
+
+# -- tareas que vuelven sin terminar -------------------------------------------
+#
+# El controlador de kagent contesta a message/send de un agente BYO con la tarea
+# aún en `working`. Leerla como respuesta daba un texto vacío.
+
+
+def _task(state, text=None):
+    task = {"kind": "task", "id": "t-1", "contextId": "c-1", "status": {"state": state}}
+    if text:
+        task["artifacts"] = [{"parts": [{"kind": "text", "text": text}]}]
+    return {"jsonrpc": "2.0", "id": "1", "result": task}
+
+
+@pytest.fixture
+def scripted(monkeypatch):
+    """Cada petición recibe el siguiente paso del guion: un cuerpo JSON o una excepción."""
+    import functools
+    import json
+
+    import httpx
+
+    def install(*steps):
+        queue, sent = list(steps), []
+
+        def handler(request):
+            sent.append(json.loads(request.content))
+            step = queue.pop(0) if len(queue) > 1 else queue[0]  # el último se repite
+            if isinstance(step, Exception):
+                raise step
+            return httpx.Response(200, json=step)
+
+        mock = httpx.MockTransport(handler)
+        monkeypatch.setattr(httpx, "Client", functools.partial(httpx.Client, transport=mock))
+        monkeypatch.setattr(httpx, "AsyncClient", functools.partial(httpx.AsyncClient, transport=mock))
+        monkeypatch.setattr("agent_a2a.client.POLL_INTERVAL", 0)
+        return sent
+
+    return install
+
+
+def test_the_request_asks_to_block():
+    from agent_a2a.client import _payload
+
+    assert _payload("hola")["params"]["configuration"] == {"blocking": True}
+
+
+def test_an_unfinished_task_is_followed_until_it_ends(scripted):
+    sent = scripted(_task("working"), _task("working"), _task("completed", "def suma(a, b): ..."))
+    assert _delegate("http://poll/")("hola") == "def suma(a, b): ..."
+    assert [r["method"] for r in sent] == ["message/send", "tasks/get", "tasks/get"]
+    assert sent[1]["params"] == {"id": "t-1"}
+
+
+@pytest.mark.asyncio
+async def test_the_async_delegate_follows_it_too(scripted):
+    sent = scripted(_task("submitted"), _task("completed", "hecho"))
+    assert await _delegate("http://poll-async/").acall("hola") == "hecho"
+    assert [r["method"] for r in sent] == ["message/send", "tasks/get"]
+
+
+def test_a_failed_poll_is_just_tried_again(scripted):
+    import httpx
+
+    sent = scripted(_task("working"), httpx.ConnectError("blip"), _task("completed", "hecho"))
+    assert _delegate("http://poll-blip/")("hola") == "hecho"
+    assert len(sent) == 3
+
+
+def test_a_task_that_never_ends_is_an_error_not_an_empty_answer(scripted):
+    from agent_core.errors import PlatformError
+
+    scripted(_task("working"))
+    with pytest.raises(PlatformError, match="still working on task t-1"):
+        _delegate("http://poll-forever/", timeout=0.05)("hola")
+
+
+def test_a_task_waiting_for_the_caller_is_not_polled(scripted):
+    sent = scripted(_task("input-required", "¿En qué lenguaje?"))
+    assert _delegate("http://poll-input/")("hola") == "¿En qué lenguaje?"
+    assert len(sent) == 1
+
+
+def test_a_task_that_fails_while_polled_is_an_error(scripted):
+    from agent_core.errors import PlatformError
+
+    scripted(_task("working"), _task("failed", "sin cuota"))
+    with pytest.raises(PlatformError, match="ended the task as failed: sin cuota"):
+        _delegate("http://poll-failed/")("hola")
