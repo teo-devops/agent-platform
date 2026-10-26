@@ -79,3 +79,21 @@ tener un checkout de `genai-platform` al lado.
 - **Los agentes no están en el GitOps todavía.** Sus manifiestos de kagent los genera `agentctl kagent render` a partir del catálogo, y siguen aplicándose con `make deploy`, igual que `agentctl mlflow init`. Llevarlos a ArgoCD exige que el CI publique el render (en una rama o como artefacto OCI). Es el siguiente paso de la Fase 4.3.
 - **Imagen de MLflow:** pasa a la 3.17.2, que corrige vulnerabilidades del propio MLflow 3.16.1. Además se actualizan los paquetes del sistema y de Python que el escaneo del CI rechazaba.
 - **Imagen de producción:** el overlay `prod` usa `ghcr.io/teo-devops/agent-platform/mlflow:v0.1.0`, que no existe hasta que se publique la primera etiqueta `v0.1.0`.
+
+## Verificación
+
+Lo que se comprobó con `make gitops-lab GITOPS_REVISION=<rama>`, en kind con ArgoCD v3.5.4:
+
+- **Las 7 Applications sincronizadas y sanas:**
+  - `base`, `kagent-crds` (Helm sobre OCI), `observability`, `monitoring` y `kagent` (con `$values`).
+  - `kagent-ui-lab`.
+  - La propia raíz.
+- **Endpoints desde el host:** MLflow 3.17.2 en `:5500`, la UI de kagent en `:8082` y la consola de SeaweedFS en `:9901`.
+- **Después, `make deploy`:** los tres agentes de `release.yaml` quedan `Ready`. Una llamada A2A a `code-reviewer` responde con Gemini y deja su traza en el MLflow del clúster: `invoke_agent` → `generate_content gemini-2.5-flash`.
+- **Dos fallos que sólo aparecieron al sincronizar,** corregidos y cubiertos por `test_gitops.py`:
+  - Una Application sin namespace de destino, que el AppProject rechaza.
+  - kube-prometheus-stack, que escribe en `kube-system`.
+
+  Un render nunca los habría mostrado.
+
+**No verificado:** el overlay `prod` en un clúster. Necesita la imagen `v0.1.0` en GHCR y los Secrets de la tabla de arriba.
