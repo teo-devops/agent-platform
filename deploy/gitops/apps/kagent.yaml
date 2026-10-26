@@ -1,0 +1,25 @@
+# kagent con los values de deploy/kagent/values.yaml: los mismos que `make platform`.
+# Los agentes no van aquí: los genera `agentctl kagent render` (ADR 0007).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kagent
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+spec:
+  project: agent-platform
+  sources:
+    - repoURL: ghcr.io/kagent-dev/kagent/helm
+      chart: kagent
+      targetRevision: 0.10.1
+      helm:
+        releaseName: kagent
+        valueFiles: [$values/deploy/kagent/values.yaml]
+    - repoURL: https://github.com/teo-devops/agent-platform.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kagent
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

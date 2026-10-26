@@ -1,0 +1,13 @@
+# Los charts de kagent están en un registro OCI: ArgoCD sólo los resuelve si el
+# repositorio se declara como Helm con enableOCI. Es público; no lleva credenciales.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-kagent-helm
+  namespace: argocd
+  labels: { argocd.argoproj.io/secret-type: repository }
+stringData:
+  type: helm
+  name: kagent
+  url: ghcr.io/kagent-dev/kagent/helm
+  enableOCI: "true"

@@ -1,0 +1,24 @@
+# El AppProject de la plataforma: de dónde puede leer ArgoCD y dónde puede escribir.
+#
+# Listas explícitas, sin "*": un repositorio o un namespace nuevo es un cambio
+# revisado aquí. tests/deploy/test_gitops.py comprueba que cada Application usa
+# sólo lo que se declara en este fichero.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: agent-platform
+  namespace: argocd
+spec:
+  description: agent-platform — agentes (kagent), AgentOps (MLflow + SeaweedFS + OTel) y monitorización.
+  sourceRepos:
+    - https://github.com/teo-devops/agent-platform.git
+    - ghcr.io/kagent-dev/kagent/helm
+    - https://prometheus-community.github.io/helm-charts
+  destinations:
+    - { server: https://kubernetes.default.svc, namespace: argocd }
+    - { server: https://kubernetes.default.svc, namespace: kagent }
+    - { server: https://kubernetes.default.svc, namespace: observability }
+    - { server: https://kubernetes.default.svc, namespace: monitoring }
+  # Los charts instalan CRDs, ClusterRoles y webhooks: hacen falta recursos de clúster.
+  clusterResourceWhitelist:
+    - { group: "*", kind: "*" }

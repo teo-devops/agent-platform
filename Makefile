@@ -53,7 +53,7 @@ MLFLOW_HINT := $(if $(MLFLOW_UP),Trazas en $(MLFLOW_URL)/$(HASH)/experiments/0/t
         casos caso-1 caso-2 caso-3 caso-4 caso-5 caso-6 caso-7 caso-8 caso-10 test-sandbox test-sbx test-openshell sandbox-image \
         a2a-up a2a-catalog a2a-run a2a-cards a2a-ensure a2a-down kagent-a2a \
         lab cluster-up images skills platform deploy render prompts register refresh-tools metrics \
-        status ui-urls cluster-down clean langflow-up langflow-url langflow-down
+        status ui-urls cluster-down clean langflow-up langflow-url langflow-down gitops-lab gitops-check
 
 help:
 	@$(MAKE) --no-print-directory casos
@@ -90,6 +90,10 @@ help:
 	@echo "  make metrics         latencia, tokens y tool calls por agente/prompt/framework"
 	@echo "  make kagent-a2a      A2A contra los agentes del clúster (port-forward al controlador)"
 	@echo "  make status | ui-urls | cluster-down"
+	@echo ""
+	@echo "GitOps — ArgoCD despliega deploy/gitops (ADR 0007)"
+	@echo "  make gitops-lab      en vez de 'make platform': ArgoCD en el lab y el overlay lab desde GitHub"
+	@echo "  make gitops-check    renderiza los overlays prod y lab"
 
 # -- desarrollo ---------------------------------------------------------------
 
@@ -132,8 +136,9 @@ run:
 export:
 	$(AGENTCTL) export --all -o $(DIST)/contracts
 
+# Versionado en schemas/: tests/core/test_contract.py comprueba que está al día.
 schema:
-	$(AGENTCTL) schema -o $(DIST)/schemas
+	$(AGENTCTL) schema -o schemas
 
 docs:
 	$(BIN)/python scripts/gen-config-reference.py
@@ -380,10 +385,10 @@ cluster-up:
 	CLUSTER=$(CLUSTER) deploy/scripts/cluster-up.sh
 
 images: skills
-	docker build --network host -t $(REGISTRY)/agent-platform/mlflow:3.16.1 -f deploy/images/Dockerfile.mlflow deploy/images
+	docker build --network host -t $(REGISTRY)/agent-platform/mlflow:3.17.2 -f deploy/images/Dockerfile.mlflow deploy/images
 	docker build --network host -t $(REGISTRY)/agent-platform/mcp:$(TAG) -f deploy/images/Dockerfile.mcp .
 	docker build --network host -t $(REGISTRY)/agent-platform/agent-host:$(TAG) -f deploy/images/Dockerfile.agent-host .
-	docker push -q $(REGISTRY)/agent-platform/mlflow:3.16.1
+	docker push -q $(REGISTRY)/agent-platform/mlflow:3.17.2
 	docker push -q $(REGISTRY)/agent-platform/mcp:$(TAG)
 	docker push -q $(REGISTRY)/agent-platform/agent-host:$(TAG)
 
@@ -409,6 +414,31 @@ platform:
 
 render:
 	$(AGENTCTL) kagent render
+
+# -- GitOps -------------------------------------------------------------------
+#
+# Lo mismo que `make platform`, pero declarativo: ArgoCD sincroniza
+# deploy/gitops/overlays/lab desde GitHub. Una cosa o la otra en un clúster, no
+# las dos: ArgoCD y helm se disputarían los mismos releases.
+ARGOCD_VERSION ?= v3.5.4
+
+gitops-check:
+	@for o in prod lab; do kubectl kustomize deploy/gitops/overlays/$$o >/dev/null && echo "  overlay $$o: ok"; done
+
+gitops-lab: cluster-up images
+	$(KUBECTL) create namespace argocd --dry-run=client -o yaml | $(KUBECTL) apply -f - >/dev/null
+	$(KUBECTL) apply --server-side --force-conflicts -n argocd \
+	  -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml >/dev/null
+	$(KUBECTL) -n argocd wait --for=condition=Available deployment/argocd-server --timeout=5m >/dev/null
+	@# La clave de Grafana no vive en git: se genera una por clúster.
+	@$(KUBECTL) create namespace monitoring --dry-run=client -o yaml | $(KUBECTL) apply -f - >/dev/null
+	@$(KUBECTL) -n monitoring get secret grafana-admin >/dev/null 2>&1 || \
+	  $(KUBECTL) -n monitoring create secret generic grafana-admin \
+	    --from-literal=admin-user=admin --from-literal=admin-password="$$(openssl rand -hex 12)" >/dev/null
+	$(KUBECTL) apply -f deploy/gitops/bootstrap/project.yaml -f deploy/gitops/bootstrap/repositories.yaml \
+	  -f deploy/gitops/bootstrap/root-lab.yaml
+	@echo "  ArgoCD sincroniza deploy/gitops/overlays/lab. Después: make deploy (los agentes) y $(AGENTCTL) mlflow init"
+	@echo "  ArgoCD:  $(KUBECTL) -n argocd port-forward svc/argocd-server 8443:443   (admin / \$$($(KUBECTL) -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d))"
 
 # Sin nombres: los agentes de deploy/kagent/release.yaml.
 prompts:

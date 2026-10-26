@@ -1,0 +1,20 @@
+# La UI de kagent en http://localhost:8082 (deploy/kagent/ui-nodeport.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kagent-ui-lab
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  project: agent-platform
+  source:
+    repoURL: https://github.com/teo-devops/agent-platform.git
+    targetRevision: main
+    path: deploy/kagent
+    # Sólo el Service: release.yaml es la entrada de `agentctl kagent render`, no un recurso.
+    directory: { include: ui-nodeport.yaml }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kagent
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

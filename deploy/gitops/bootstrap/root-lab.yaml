@@ -1,0 +1,29 @@
+# app-of-apps del laboratorio (kind): lo mismo que root-prod.yaml, con el overlay lab.
+#
+#   make gitops-lab      # sobre `make cluster-up`: instala ArgoCD y aplica esto
+#
+# Lee de GitHub, así que despliega lo que está subido. Para probar una rama,
+# cambia targetRevision por su nombre.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agent-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: agent-platform
+  source:
+    repoURL: https://github.com/teo-devops/agent-platform.git
+    targetRevision: main
+    path: deploy/gitops/overlays/lab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: { duration: 15s, factor: 2, maxDuration: 5m }

@@ -1,0 +1,27 @@
+# Prometheus + Grafana (kube-prometheus-stack), para la salud del clúster y de los
+# pods. Las trazas y evals de los agentes siguen en MLflow; esto no las sustituye.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "0" }
+spec:
+  project: agent-platform
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.2.0
+      helm:
+        releaseName: monitoring
+        valueFiles: [$values/deploy/gitops/values/monitoring.yaml]
+    - repoURL: https://github.com/teo-devops/agent-platform.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    # Las CRDs del operador de Prometheus superan el límite de anotación de un apply normal.
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]

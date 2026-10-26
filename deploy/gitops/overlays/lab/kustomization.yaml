@@ -1,0 +1,14 @@
+# El laboratorio (kind): lo común, más la UI de kagent por NodePort y una
+# monitorización sin volumen. MLflow y SeaweedFS ya salen por NodePort en
+# deploy/observability, con los puertos que publica deploy/kind/cluster.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../apps
+  - kagent-ui.yaml
+patches:
+  - target: { kind: Application, name: monitoring }
+    patch: |-
+      - op: add
+        path: /spec/sources/0/helm/valueFiles/-
+        value: $values/deploy/gitops/values/monitoring-lab.yaml
