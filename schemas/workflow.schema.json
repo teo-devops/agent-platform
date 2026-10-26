@@ -1,0 +1,621 @@
+{
+  "$defs": {
+    "AllowDeny": {
+      "additionalProperties": false,
+      "description": "Glob allow/deny lists. ``deny`` always wins over ``allow``.",
+      "properties": {
+        "allow": {
+          "description": "Patrones permitidos, p. ej. `[\"code.*\"]`.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Allow",
+          "type": "array"
+        },
+        "deny": {
+          "description": "Patrones prohibidos. `deny` gana siempre sobre `allow`.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Deny",
+          "type": "array"
+        }
+      },
+      "title": "AllowDeny",
+      "type": "object"
+    },
+    "BudgetSpec": {
+      "additionalProperties": false,
+      "description": "Cost ceilings for a single invocation.",
+      "properties": {
+        "max_tokens": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo de tokens de una invocación.",
+          "title": "Max Tokens"
+        },
+        "max_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo en dólares de una invocación. Se calcula con `model.pricing`.",
+          "title": "Max Usd"
+        }
+      },
+      "title": "BudgetSpec",
+      "type": "object"
+    },
+    "EdgeSpec": {
+      "additionalProperties": false,
+      "description": "A directed edge between two nodes; ``from: START`` marks an entry point.",
+      "properties": {
+        "from": {
+          "description": "Nodo origen, o `START` para una entrada del flujo.",
+          "title": "From",
+          "type": "string"
+        },
+        "to": {
+          "description": "Nodo destino.",
+          "title": "To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "title": "EdgeSpec",
+      "type": "object"
+    },
+    "EvalSpec": {
+      "additionalProperties": false,
+      "description": "A quality gate on the result of a workflow.\n\nNeutral on purpose: it says which metric matters and where the line is, not\nwho measures it. Whoever runs the workflow decides that.",
+      "properties": {
+        "metric": {
+          "description": "Métrica que decide, p. ej. `pass_at_1`.",
+          "title": "Metric",
+          "type": "string"
+        },
+        "threshold": {
+          "description": "Dónde está la línea.",
+          "title": "Threshold",
+          "type": "number"
+        },
+        "goal": {
+          "default": "maximize",
+          "description": "De qué lado de la línea hay que estar.",
+          "enum": [
+            "maximize",
+            "minimize"
+          ],
+          "title": "Goal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "threshold"
+      ],
+      "title": "EvalSpec",
+      "type": "object"
+    },
+    "GuardrailRule": {
+      "additionalProperties": false,
+      "description": "One check applied to a piece of text at a given stage.",
+      "properties": {
+        "name": {
+          "description": "Nombre de la regla. Aparece en la traza cuando salta.",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "description": "Qué comprueba. Un tipo nuevo es código; una regla nueva es configuración.",
+          "enum": [
+            "regex_deny",
+            "keywords_deny",
+            "max_chars",
+            "pii_redact"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "action": {
+          "default": "block",
+          "description": "`block` corta, `redact` reescribe y sigue, `warn` sólo deja constancia.",
+          "enum": [
+            "block",
+            "redact",
+            "warn"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Qué se responde cuando bloquea.",
+          "title": "Message"
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Parámetros del tipo de regla (`keywords`, `patterns`, `limit`...).",
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "GuardrailRule",
+      "type": "object"
+    },
+    "GuardrailsSpec": {
+      "additionalProperties": false,
+      "description": "Guardrails grouped by the stage they run at.",
+      "properties": {
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profile"
+        },
+        "input": {
+          "items": {
+            "$ref": "#/$defs/GuardrailRule"
+          },
+          "title": "Input",
+          "type": "array"
+        },
+        "output": {
+          "items": {
+            "$ref": "#/$defs/GuardrailRule"
+          },
+          "title": "Output",
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/GuardrailRule"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "title": "GuardrailsSpec",
+      "type": "object"
+    },
+    "InputSpec": {
+      "additionalProperties": false,
+      "description": "A parameter a workflow takes, referenced as ``{{ inputs.name }}``.",
+      "properties": {
+        "name": {
+          "description": "Identificador, referenciado como `{{ inputs.nombre }}`.",
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "Qué se espera en este parámetro.",
+          "title": "Description",
+          "type": "string"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Valor si no se pasa ninguno.",
+          "title": "Default"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "InputSpec",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "description": "Identity of a manifest. ``name`` is the reference used everywhere else.",
+      "properties": {
+        "name": {
+          "description": "Referencia con la que se le llama desde todas partes. Minúsculas, dígitos y guiones.",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "default": "0.1.0",
+          "description": "SemVer. Es lo que se pinnea al publicar el manifiesto.",
+          "title": "Version",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "Una línea: qué hace y cuándo usarlo.",
+          "title": "Description",
+          "type": "string"
+        },
+        "owner": {
+          "default": "unassigned",
+          "description": "Equipo responsable. Aparece como label al publicar.",
+          "title": "Owner",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Etiquetas libres para buscar y agrupar.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Metadatos clave/valor para quien consuma el manifiesto.",
+          "title": "Labels",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Metadata",
+      "type": "object"
+    },
+    "NodeSpec": {
+      "additionalProperties": false,
+      "description": "One step of a workflow: a named reference to an agent manifest.",
+      "properties": {
+        "name": {
+          "description": "Nombre del paso dentro del flujo. Único.",
+          "title": "Name",
+          "type": "string"
+        },
+        "agent": {
+          "description": "Agente que lo ejecuta. Al publicar se pinnea a `nombre@X.Y.Z`.",
+          "title": "Agent",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "Qué aporta este paso.",
+          "title": "Description",
+          "type": "string"
+        },
+        "needs": {
+          "description": "Pasos que deben terminar antes. Normalmente se deja vacío y se deduce de `type`; la forma publicada siempre lo trae escrito.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reintentos del paso. Reintentar es cosa de quien orquesta, por eso este límite viaja con el paso y el resto de `policies` no.",
+          "title": "Retries"
+        },
+        "with": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "De dónde lee cada parámetro: `{{ inputs.x }}` o `{{ steps.y.output }}`. Vacío, cada runtime pasa el estado como sepa.",
+          "title": "With",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "agent"
+      ],
+      "title": "NodeSpec",
+      "type": "object"
+    },
+    "PermissionSpec": {
+      "additionalProperties": false,
+      "description": "What an agent is allowed to reach.\n\nChecked twice: at build time (a denied tool is never attached) and at call\ntime by the permissions plugin (a model cannot talk its way past it).",
+      "properties": {
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Perfil de configs/permissions.yaml del que se hereda.",
+          "title": "Profile"
+        },
+        "tools": {
+          "$ref": "#/$defs/AllowDeny",
+          "description": "Qué herramientas puede alcanzar."
+        },
+        "agents": {
+          "$ref": "#/$defs/AllowDeny",
+          "description": "A qué agentes puede delegar. Lista distinta de la de herramientas, a propósito."
+        }
+      },
+      "title": "PermissionSpec",
+      "type": "object"
+    },
+    "PluginRef": {
+      "additionalProperties": false,
+      "description": "An extra runtime plugin, beyond those derived from the sections above.",
+      "properties": {
+        "ref": {
+          "description": "Plugin registrado, más allá de los que salen de guardrails/permisos/política.",
+          "title": "Ref",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Permite desactivarlo por entorno.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "config": {
+          "additionalProperties": true,
+          "description": "Configuración que recibe el plugin.",
+          "title": "Config",
+          "type": "object"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "PluginRef",
+      "type": "object"
+    },
+    "PolicySpec": {
+      "additionalProperties": false,
+      "description": "Operational limits enforced by the runtime, not by the model.",
+      "properties": {
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Perfil de configs/policies.yaml del que se hereda.",
+          "title": "Profile"
+        },
+        "max_tool_calls": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo de llamadas a herramienta por invocación.",
+          "title": "Max Tool Calls"
+        },
+        "max_llm_calls": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Techo de llamadas al modelo por invocación.",
+          "title": "Max Llm Calls"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tiempo máximo de una invocación, reintentos incluidos. Al pasarlo, la ejecución se corta.",
+          "title": "Timeout Seconds"
+        },
+        "retry_attempts": {
+          "default": 0,
+          "description": "Reintentos ante fallos transitorios, sólo mientras no se haya emitido nada. Un guardrail o un permiso no se reintentan.",
+          "minimum": 0,
+          "title": "Retry Attempts",
+          "type": "integer"
+        },
+        "budget": {
+          "$ref": "#/$defs/BudgetSpec",
+          "description": "Techos de coste de una invocación."
+        }
+      },
+      "title": "PolicySpec",
+      "type": "object"
+    },
+    "WorkflowBody": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "default": "sequential",
+          "description": "Forma del flujo: `sequential` en línea, `parallel` en abanico, `loop` repitiendo, `graph` con las aristas escritas a mano.",
+          "enum": [
+            "sequential",
+            "parallel",
+            "loop",
+            "graph"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "runtime": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Framework que lo ejecuta. Ojo: LCEL no sabe de grafos ni bucles, así que `graph` y `loop` sólo corren en adk o langgraph.",
+          "title": "Runtime"
+        },
+        "nodes": {
+          "description": "Los pasos, en orden de declaración.",
+          "items": {
+            "$ref": "#/$defs/NodeSpec"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "edges": {
+          "description": "Sólo para `type: graph`: la topología, arista a arista.",
+          "items": {
+            "$ref": "#/$defs/EdgeSpec"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "max_iterations": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sólo para `type: loop`: cuántas vueltas como mucho.",
+          "title": "Max Iterations"
+        },
+        "inputs": {
+          "description": "Parámetros de entrada, referenciados como `{{ inputs.nombre }}`.",
+          "items": {
+            "$ref": "#/$defs/InputSpec"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "eval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvalSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Puerta de calidad sobre el resultado del flujo."
+        },
+        "guardrails": {
+          "$ref": "#/$defs/GuardrailsSpec",
+          "description": "Guardrails de todo el flujo, además de los de cada agente."
+        },
+        "policies": {
+          "$ref": "#/$defs/PolicySpec",
+          "description": "Límites operativos del flujo."
+        },
+        "permissions": {
+          "$ref": "#/$defs/PermissionSpec",
+          "description": "Qué agentes puede componer este flujo."
+        },
+        "plugins": {
+          "description": "Plugins extra a nivel de flujo.",
+          "items": {
+            "$ref": "#/$defs/PluginRef"
+          },
+          "title": "Plugins",
+          "type": "array"
+        }
+      },
+      "title": "WorkflowBody",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "default": "agents.platform/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "Workflow",
+      "default": "Workflow",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/WorkflowBody"
+    }
+  },
+  "required": [
+    "metadata"
+  ],
+  "title": "WorkflowManifest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Manifiesto 'Workflow' de agents.platform/v1. GENERADO desde los modelos pydantic de agent-core con 'agentctl schema' — no editar a mano."
+}

@@ -11,15 +11,14 @@ sigue siendo el de los modelos, y que la forma resuelta es correcta.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-CONTRACTS_DIR = Path(
-    os.environ.get("AGENTIC_CONTRACTS_DIR", ROOT.parent / "genai-platform" / "contracts")
-)
+#: Donde se publica el esquema para quien escribe o valida manifiestos fuera de
+#: este repositorio (editores, CI de otros equipos). Lo genera `make schema`.
+SCHEMAS_DIR = ROOT / "schemas"
 
 PINNED = r"^[a-z0-9-]+@[0-9]+\.[0-9]+\.[0-9]+$"
 
@@ -109,19 +108,14 @@ def test_author_written_needs_are_respected(store):
     assert dependencies(body) == {"a": [], "b": [], "c": ["a"]}
 
 
-@pytest.mark.skipif(
-    not CONTRACTS_DIR.exists(),
-    reason=f"el plano plataforma no está en {CONTRACTS_DIR}; "
-           f"apunta AGENTIC_CONTRACTS_DIR a un checkout de genai-platform",
-)
 @pytest.mark.parametrize("kind", ["Agent", "Workflow"])
 def test_published_schema_is_up_to_date(schemas, kind):
-    """El esquema que consume el otro plano tiene que ser el de estos modelos.
+    """El esquema publicado en schemas/ tiene que ser el de estos modelos.
 
     Si falla, alguien cambió un modelo y no regeneró:  make schema
     """
-    published = CONTRACTS_DIR / "schemas" / f"{kind.lower()}.schema.json"
-    assert published.exists(), f"falta {published}: genéralo con 'agentctl schema'"
+    published = SCHEMAS_DIR / f"{kind.lower()}.schema.json"
+    assert published.exists(), f"falta {published}: genéralo con 'make schema'"
 
     stored = json.loads(published.read_text(encoding="utf-8"))
     for generated_only in ("$schema", "title", "description"):
@@ -133,7 +127,7 @@ def test_published_schema_is_up_to_date(schemas, kind):
 
     assert stored == current, (
         f"el esquema publicado de {kind} está desfasado respecto a los modelos. "
-        f"Regenéralo:  agentctl schema --kind {kind} -o {CONTRACTS_DIR / 'schemas'}"
+        "Regenéralo:  make schema"
     )
 
 
